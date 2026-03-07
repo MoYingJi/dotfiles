@@ -1,0 +1,12 @@
+version = 1
+
+[global]
+version = 1
+
+# [[game]]
+# exe = "YuanShen.exe"
+# multiplier = 3
+# flow_scale = 1.0
+# performance_mode = false
+# hdr_mode = false
+# experimental_present_mode = "fifo"

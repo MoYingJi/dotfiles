@@ -1,5 +1,29 @@
 # Chezmoi Ignore
 
-{{- if (lookPath "nvim") }}
-/dot_config/nvim
+{{- if not (lookPath "fastfetch") }}
+/.config/exact_fastfetch
+{{- end }}
+
+{{- if not (lookPath "kitty") }}
+/.config/exact_kitty
+{{- end }}
+
+{{- if not (lookPath "lsfg-vk-ui") }}
+/.config/exact_lsfg-vk
+{{- end }}
+
+{{- if not (lookPath "mangohud") }}
+/.config/exact_MangoHud
+{{- end }}
+
+{{- if not (lookPath "wechat-universal") }}
+/.config/exact_wechat-universal
+{{- end }}
+
+{{- if not (lookPath "nvim") }}
+/.config/nvim
+{{- end }}
+
+{{- if not (lookPath "gamemoderun") }}
+/.config/gamemode.ini
 {{- end }}
