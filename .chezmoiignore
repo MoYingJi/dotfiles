@@ -1,23 +1,27 @@
 # Chezmoi Ignore
 
 {{- if not (lookPath "fastfetch") }}
-/.config/exact_fastfetch
+/.config/fastfetch
 {{- end }}
 
 {{- if not (lookPath "kitty") }}
-/.config/exact_kitty
+/.config/kitty
 {{- end }}
 
 {{- if not (lookPath "lsfg-vk-ui") }}
-/.config/exact_lsfg-vk
+/.config/lsfg-vk
 {{- end }}
 
 {{- if not (lookPath "mangohud") }}
-/.config/exact_MangoHud
+/.config/MangoHud
+{{- end }}
+
+{{- if not (lookPath "mpv") }}
+/.config/mpv
 {{- end }}
 
 {{- if not (lookPath "wechat-universal") }}
-/.config/exact_wechat-universal
+/.config/wechat-universal
 {{- end }}
 
 {{- if not (lookPath "nvim") }}

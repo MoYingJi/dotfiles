@@ -1,0 +1,7 @@
+# Chezmoi 外部文件
+
+# mpv stats.lua 汉化
+# LICENSE: GPL-2.0-only
+[".config/mpv/scripts/stats.lua"]
+    type = "file"
+    url = "https://github.com/FinnRaze/mpv-stats-zh/raw/refs/heads/master/stats.lua"
