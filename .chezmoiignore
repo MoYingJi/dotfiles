@@ -1,0 +1,5 @@
+# Chezmoi Ignore
+
+{{- if (lookPath "nvim") }}
+/dot_config/nvim
+{{- end }}
