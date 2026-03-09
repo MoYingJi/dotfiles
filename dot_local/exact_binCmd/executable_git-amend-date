@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+
+# 伪装你的提交时间
+
+GIT_COMMITTER_DATE="$1" git commit --amend --date "$1" "${@:2}"

@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+
+# 用法: do-which <action> <file>
+# 对 file 执行 which + readlink 找到其真实位置后执行 action
+$1 "$(readlink -m "$(which "$2" 2> /dev/null || echo "$2")")"

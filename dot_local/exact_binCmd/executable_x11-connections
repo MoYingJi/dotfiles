@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+
+# https://blog.mkacg.com/2025/04/22/resolve-Maximum-number-of-clients-reached/
+
+sudo ss -x src "*/tmp/.X11-unix/*" | grep -Eo "[0-9]+\s*$" | while IFS= read -r port; do
+    sudo ss -p -x | grep -w "$port" | grep -v X11-unix
+done | grep -Eo '".+"' | sort | uniq -c | sort -rn

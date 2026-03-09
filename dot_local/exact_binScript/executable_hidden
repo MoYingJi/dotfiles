@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+
+# 将所有参数转换为每行一个文件名的形式，并追加到 .hidden 文件中
+
+while (( "$#" )); do
+    real=$(realpath "$1")
+    if [[ "$real" == "$(pwd)"/* ]]; then
+        name=$(basename "$real")
+        echo "$name" >> "$(dirname "$real")/.hidden"
+        echo "Hidden $name ($real)"
+    else echo "Skipping $1"; fi
+    shift
+done

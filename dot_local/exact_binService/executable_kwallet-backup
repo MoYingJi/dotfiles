@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+
+set -euo pipefail
+
+kwallet_path="${1:-"${XDG_DATA_HOME:-"$HOME/.local/share"}/kwalletd"}"
+backup_path="${2:-"$(xdg-user-dir PUBLICSHARE)/backup/kwalletd"}"
+
+date="$(date +%Y-%m-%d_%H%M%S)"
+
+cp -r "${kwallet_path}" "${backup_path}/${date}"

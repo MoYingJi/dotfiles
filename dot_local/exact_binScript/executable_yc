@@ -1,0 +1,40 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2086
+
+# 依赖: fzf
+# 环境:
+#   $QUERY_ARG  := "-Qq"
+#   $INFO_ARG   := "-Qi"
+#   $FZF_ARGS   += ("--query" "$2")
+#   $AUR_HELPER := "yay"
+
+# 用法: yc <option> [query]
+# yay 列出本地安装的所有软件包 并执行 <option>
+
+# 如 yc -R linux 会打开 fzf 界面 并设置初始查询词为 linux
+# 选定 linux-lts 后 执行 yay -R linux-lts
+
+# 环境变量使用示例: 查询所有软件包 (包括未安装 不包括 AUR)
+# QUERY_ARG=-SNlq INFO_ARG=-Si yc
+
+[ -z "$QUERY_ARG" ] && QUERY_ARG="-Qq"
+[ -z "$INFO_ARG" ] && INFO_ARG="-Qi"
+
+[ -n "$2" ] && FZF_ARGS+=("--query" "$2")
+
+[ -z "$AUR_HELPER" ] && AUR_HELPER="yay"
+
+PREVIEW_CMD="""
+    $AUR_HELPER -Qs --color=always \"^\\\$0\\\$\"
+    echo
+    $AUR_HELPER $INFO_ARG --color=always \"\\\$0\"
+"""
+
+
+r="$($AUR_HELPER $QUERY_ARG | fzf \
+    --multi \
+    "${FZF_ARGS[@]}" \
+    --preview "bash -c \"$PREVIEW_CMD\" {}"
+)"
+[ -z "$r" ] && exit 0
+$AUR_HELPER $1 $r

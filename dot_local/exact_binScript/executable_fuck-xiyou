@@ -1,0 +1,51 @@
+#!/usr/bin/bash
+#shellcheck disable=1090
+
+# 依赖: curl, jq, [wl-copy]
+
+[ -z "$SECURITY_FILE" ] && SECURITY_FILE="$HOME/.config/shell/_security.conf"
+[ -f "$SECURITY_FILE" ] || exit 1
+
+[ -z "$COPY" ] && COPY="wl-copy"
+[ "$COPY" = "-" ] && COPY=""
+
+[ -z "$DOMAIN" ] && DOMAIN="xiyou.me"
+
+source "$SECURITY_FILE"
+
+[ -z "$XIYOU_AUTH" ] && exit 1
+
+data="$(
+    curl "https://$DOMAIN/api/v1/user/getSubscribe" \
+        --silent \
+        --compressed \
+        -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0" \
+        -H "Accept: application/json, text/plain, */*" \
+        -H "Accept-Language: zh-CN,zh;q=0.9" \
+        -H "Accept-Encoding: gzip, deflate, br, zstd" \
+        -H "Authorization: $XIYOU_AUTH" \
+        -H "DNT: 1" \
+        -H "Sec-GPC: 1" \
+        -H "Alt-Used: $DOMAIN" \
+        -H "Connection: keep-alive" \
+        -H "Referer: https://$DOMAIN/dashboard" \
+        -H "Sec-Fetch-Dest: empty" \
+        -H "Sec-Fetch-Mode: cors" \
+        -H "Sec-Fetch-Site: same-origin" \
+        -H "TE: trailers"
+)"
+
+echo "Data:"
+echo "$data" | jq
+
+subscribe_url="$(echo "$data" | jq -r .data.subscribe_url)"
+
+echo
+echo "Subscribe URL:"
+echo "$subscribe_url"
+
+if [ -n "$COPY" ]; then
+    echo
+    echo "Copy: $COPY"
+    echo "$subscribe_url" | "$COPY"
+fi

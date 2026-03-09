@@ -1,0 +1,15 @@
+[Unit]
+Description=Backup KDE Wallet
+DefaultDependencies=no
+Before=shutdown.target systemd-user-sessions.service
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash %h/.local/binService/kwallet-backup %h/.local/share/kwalletd
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=shutdown.target

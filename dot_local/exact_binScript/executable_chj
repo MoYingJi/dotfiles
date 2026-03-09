@@ -1,0 +1,56 @@
+#!/usr/bin/bash
+
+# 依赖:
+#   fzf
+#   archlinux-java (extra/java-runtime-common)
+# 环境:
+#   $JVMS_DIR := "/lib/jvm"
+#   $FZF_ARGS += ("--query" "$java")
+
+# 用法: chj [java]
+# 参数 java 可以直接是名称 否则就作为模糊搜索初始查询词
+
+[ -z "$JVMS_DIR" ] && JVMS_DIR="/lib/jvm"
+[ -z "$PREVIEW_RELEASE" ] && PREVIEW_RELEASE="y"
+
+is_java() {
+    [ -d "$(realpath "$1")" ] &&
+    [ -f "$1/bin/java" ] &&
+    [ -x "$1/bin/java" ] &&
+    [ -f "$1/release" ] &&
+    return 0; return 1
+}
+
+ch_java() {
+    sudo archlinux-java set "$1" && echo "[chj] 成功切换为: $(readlink "$JVMS_DIR"/default)" && exit 0
+    echo "[chj] 出现错误!"
+}
+
+
+[ $# -gt 1 ] && echo "Usage: chj [java]" && exit 1
+
+[ -n "$1" ] && java="$1"
+
+is_java "$JVMS_DIR/$java" && ch_java "$java" && exit 0
+
+current="$(realpath "$JVMS_DIR/default")"
+for jvm in "$JVMS_DIR"/*; do
+    [ "$jvm" == "$JVMS_DIR/default" ] && continue
+    [ "$jvm" == "$JVMS_DIR/default-runtime" ] && continue
+    is_java "$jvm" || continue
+    name="$(basename "$jvm")"
+    if [ "$(realpath "$jvm")" == "$current" ]
+        then CURRENT="$name (default)"
+        else CHJ_JVM+=("$name")
+    fi
+done
+CHJ_JVM=("$CURRENT" "${CHJ_JVM[@]}")
+
+[ -n "$java" ] && FZF_ARGS+=("--query" "$java")
+[ "$PREVIEW_RELEASE" = "y" ] && FZF_ARGS+=("--preview" "echo {} | awk '{print \$1}' | xargs -I % bat $JVMS_DIR/%/release --language ini --color always --plain")
+
+list="$(printf '%s\n' "${CHJ_JVM[@]}")"
+
+java=$(echo "$list" | fzf "${FZF_ARGS[@]}" ) || exit 0
+java=${java% (default)}
+ch_java "$java"

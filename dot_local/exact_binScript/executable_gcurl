@@ -1,0 +1,41 @@
+#!/usr/bin/bash
+
+[ -z "$MIRROR" ] && MIRROR="https://ghfast.top/"
+[ "$MIRROR" = "x" ] && MIRROR="https://"
+[ "$MIRROR" = "-" ] && MIRROR=""
+
+[ -z "$CURL" ] && CURL="/usr/bin/curl"
+
+# GitHub Mirror - Curl
+
+replace-url() {
+    domain="$(echo "$1" | cut -f3 -d'/')"
+    others="$(echo "$1" | cut -f4- -d'/')"
+
+    case "$domain" in
+        "github.com" \
+        | "raw.githubusercontent.com" \
+        ) ret="$MIRROR$domain/$others" ;;
+
+        *) ret="$1"; ;;
+    esac
+
+    echo -n "$ret"
+}
+
+
+replaced_args=()
+for arg in "$@"; do
+    if [[ "$arg" =~ ^http[s]?:// ]]
+        then replaced_args+=("$(replace-url "$arg")")
+        else replaced_args+=("$arg")
+    fi
+done
+
+if [[ "$CR_STDOUT" ]]; then
+    echo [gcurl] "$CURL" "${replaced_args[@]}"
+elif ! [[ "$CR_NOINFO" ]]; then
+    echo [gcurl] "$CURL" "${replaced_args[@]}" >&2
+fi
+
+$CURL "${replaced_args[@]}"

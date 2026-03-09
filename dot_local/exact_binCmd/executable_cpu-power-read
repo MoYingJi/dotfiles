@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+
+[ "${#INTEL_CPU_POWER_FILE[@]}" -lt 1 ] && INTEL_CPU_POWER_FILE=(
+    /sys/class/powercap/intel-rapl:0/energy_uj
+    /sys/class/powercap/intel-rapl:0:*/energy_uj
+)
+
+for file in "${INTEL_CPU_POWER_FILE[@]}"; do
+    if [ -f "$file" ] && [ ! -r "$file" ]; then
+        sudo chmod a+r "$file"
+    fi
+done

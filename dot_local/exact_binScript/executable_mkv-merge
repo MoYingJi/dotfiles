@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+
+# 依赖: ffmpeg
+# 用法: mkv-merge <output> <inputs...>
+
+if [ $# -lt 2 ]; then
+  echo "Usage: mkv-merge <output> <inputs...>"
+  exit 1
+fi
+
+output="$1" && shift
+
+templist="$(mktemp)"
+
+for input in "$@"; do
+  echo "file '$(realpath "$input")'" >> "$templist"
+done
+
+ffmpeg -f concat -safe 0 -i "$templist" -c copy "$output"
+code=$?
+
+rm "$templist"
+exit $code
