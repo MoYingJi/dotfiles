@@ -1,7 +1,19 @@
 # Chezmoi Ignore
 
+{{- if not (lookPath "bash") }}
+/.bashrc
+{{- end }}
+
+{{- if not (lookPath "zsh") }}
+/.zshrc
+{{- end }}
+
 {{- if not (lookPath "fastfetch") }}
 /.config/fastfetch
+{{- end }}
+
+{{- if not (lookPath "fish") }}
+/.config/fish
 {{- end }}
 
 {{- if not (lookPath "kitty") }}
