@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Icon=hwinfo
+
+Name[zh_CN]=FFProbe 输出信息
+Name=FFProbe Output Info
+
+Comment[zh_CN]=使用 FFProbe 输出多媒体文件信息
+Comment=Use FFProbe to output media file info
+
+Exec=/usr/bin/sh -c "/usr/bin/ffprobe -hide_banner -i \\"\\$1\\"; read" sh "%f"
+TryExec=/usr/bin/ffprobe
+Terminal=true
+NoDisplay=true
+
+Categories=AudioVideo;Video;Audio;
+MimeType={{ include ".chezmoitemplates/ffmpeg-mimetype.tmpl" }}
