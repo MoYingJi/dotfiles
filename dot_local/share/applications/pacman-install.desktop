@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Icon=package-x-generic
+
+Name[zh_CN]=Pacman 命令行安装
+Name=Pacman CLI Install
+
+Comment[zh_CN]=使用 Pacman 命令行安装软件包
+Comment=Use Pacman CLI to install packages
+
+Exec=/usr/bin/sh -c "pkexec /usr/bin/pacman -U \\"\\$1\\"; echo \\"\n程序已经结束了喵！\\"; read" sh %u
+TryExec=/usr/bin/pacman
+Terminal=true
+NoDisplay=true
+
+MimeType=application/x-pacman

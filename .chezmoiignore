@@ -83,3 +83,23 @@
 /.config/qq-bwrap-flags.conf
 /.config/qq-electron-flags.conf
 {{- end }}
+
+###### /.local/share/applications ######
+
+{{- if not (lookPath "ffprobe") }}
+/.local/share/applications/ffprobe-output.desktop
+{{- end }}
+
+{{- if not (lookPath "pacman") }}
+/.local/share/applications/pacman-install.desktop
+{{- end }}
+
+###### KDE 图标 ######
+
+{{- if not (lookPath "plasmashell") }}
+/.local/share/kio
+{{- end }}
+
+{{- if not (lookPath "localsend") }}
+/.local/share/kio/servicemenus/share-with-localsend.desktop
+{{- end }}

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Service
+MimeType=inode/directory;application/octet-stream;*/*
+X-KDE-Priority=TopLevel
+X-KDE-StartupNotify=false
+Icon=org.localsend.localsend_app
+Actions=SendWithLocalSend
+
+[Desktop Action SendWithLocalSend]
+Name=Share with LocalSend
+Name[zh_CN]=分享到 LocalSend
+Exec=localsend %F
+Icon=localsend

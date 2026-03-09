@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+   <mime-type type="application/x-pacman">
+       <comment xml:lang="zh">Pacman 安装包</comment>
+       <sub-class-of type="application/x-compress"/>
+       <icon name="package-x-generic"/>
+       <glob pattern="*.pacman"/>
+       <glob pattern="*.pkg.tar.*"/>
+   </mime-type>
+</mime-info>

@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+
+    <mime-type type="application/ttml+xml">
+        <comment xml:lang="zh">AMLL TTML 歌词</comment>
+        <sub-class-of type="application/xml"/>
+        <icon name="text-xml"/>
+        <glob pattern="*.ttml"/>
+    </mime-type>
+
+    <mime-type type="application/x-amll-editor-project">
+        <comment xml:lang="zh">AMLL Editor 工程文件</comment>
+        <sub-class-of type="application/zip"/>
+        <icon name="application-zip"/>
+        <glob pattern="*.alp"/>
+    </mime-type>
+
+    <mime-type type="application/x-lrc">
+        <comment xml:lang="zh">LyRiCs 歌词</comment>
+        <sub-class-of type="text/plain"/>
+        <icon name="text-plain"/>
+        <glob pattern="*.lrc"/>
+    </mime-type>
+
+    <mime-type type="application/x-lrc-a2">
+        <comment xml:lang="zh">增强 LyRiCs 歌词</comment>
+        <sub-class-of type="text/plain"/>
+        <icon name="text-plain"/>
+        <glob pattern="*.alrc"/>
+        <glob pattern="*.lrc"/>
+    </mime-type>
+
+    <mime-type type="application/x-netease-yrc">
+        <comment xml:lang="zh">网易云音乐歌词</comment>
+        <sub-class-of type="text/plain"/>
+        <icon name="text-plain"/>
+        <glob pattern="*.yrc"/>
+    </mime-type>
+
+    <mime-type type="application/x-qq-music-qrc">
+        <comment xml:lang="zh">QQ 音乐歌词</comment>
+        <sub-class-of type="text/plain"/>
+        <icon name="text-plain"/>
+        <glob pattern="*.qrc"/>
+    </mime-type>
+
+    <mime-type type="application/x-salt-player-spl">
+        <comment xml:lang="zh">Salt Player 歌词</comment>
+        <sub-class-of type="text/plain"/>
+        <icon name="text-plain"/>
+        <glob pattern="*.lrc"/>
+        <glob pattern="*.spl"/>
+    </mime-type>
+
+</mime-info>
