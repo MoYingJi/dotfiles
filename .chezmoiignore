@@ -8,6 +8,10 @@
 /.zshrc
 {{- end }}
 
+{{- if not (lookPath "bilibili") }}
+/.config/bilibili
+{{- end }}
+
 {{- if not (lookPath "fastfetch") }}
 /.config/fastfetch
 {{- end }}
@@ -36,10 +40,23 @@
 /.config/wechat-universal
 {{- end }}
 
+{{- if not (lookPath "fc-list") }}
+/.config/fontconfig
+{{- end }}
+
 {{- if not (lookPath "nvim") }}
 /.config/nvim
 {{- end }}
 
+{{- if not (lookPath "sparkle") }}
+/.config/sparkle
+{{- end }}
+
 {{- if not (lookPath "gamemoderun") }}
 /.config/gamemode.ini
+{{- end }}
+
+{{- if not (lookPath "qq") }}
+/.config/qq-bwrap-flags.conf
+/.config/qq-electron-flags.conf
 {{- end }}

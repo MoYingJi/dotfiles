@@ -1,0 +1,18 @@
+items:
+    - name: Secret Script
+      id: _secret
+      ext: js
+      type: local
+      global: true
+
+    - name: Global Script
+      id: Script
+      ext: js
+      type: local
+      global: true
+
+    - name: Global Merge
+      id: Merge
+      ext: yaml
+      type: local
+      global: true
