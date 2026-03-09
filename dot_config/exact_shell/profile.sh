@@ -8,7 +8,5 @@
 # $COMMON_SHELL_PROFILE_DIR: 指向此文件夹 以便编辑和刷新
 # $SPEC_SHELL_PROFILE: 指向调用 shell 的 profile 以便刷新
 
-command -v "chezmoi" > /dev/null && chezmoi apply
-
 source "$COMMON_SHELL_PROFILE_DIR/environment.sh"
 source "$COMMON_SHELL_PROFILE_DIR/aliases.sh"

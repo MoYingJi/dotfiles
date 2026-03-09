@@ -1,5 +1,14 @@
 # Chezmoi Ignore
 
+###### all ######
+
+{{- if not (lookPath "waylyrics") }}
+/.config/waylyrics
+/.local/share/waylyrics
+{{- end }}
+
+###### / ######
+
 {{- if not (lookPath "bash") }}
 /.bashrc
 {{- end }}
@@ -7,6 +16,8 @@
 {{- if not (lookPath "zsh") }}
 /.zshrc
 {{- end }}
+
+###### /.config ######
 
 {{- if not (lookPath "bilibili") }}
 /.config/bilibili
@@ -48,7 +59,7 @@
 /.config/nvim
 {{- end }}
 
-{{- if not (lookPath "sparkle") }}
+{{- if not (stat "/opt/sparkle") }}
 /.config/sparkle
 {{- end }}
 

@@ -11,6 +11,8 @@ alias egp='edit /etc/profile'
 alias e-kate='export EDITOR="kate -b"'
 alias e-nvim='export EDITOR="nvim"'
 
+alias che-ref='command -v "chezmoi" > /dev/null && chezmoi diff && chezmoi apply'
+
 ## 短名
 alias c='clear'
 alias l='ls'

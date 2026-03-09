@@ -1,0 +1,51 @@
+/* 标题边框 */
+headerbar {
+  opacity: 0.5;
+}
+
+/* 主窗口 */
+window#main-window {
+  background-color: hsla(0, 0%, 0%, 0);
+
+  /* 减少 Gtk CSD 的阴影 */
+  box-shadow: 0 0 1px 0;
+
+  /* 内边距捏 @Custom */
+  padding: 20px;
+
+  /* Font @Custom */
+  font-family: "Mi Sans";
+}
+
+:lang(ja) {
+  font-family: "Noto Sans CJK JP";
+}
+
+
+label#above, label#below {
+  padding: 10px;
+  color: hsl(0, 0%, 100%);
+  background-color: hsla(0, 0%, 0%, 0.3);
+  border-radius: 10px;
+}
+
+label#above {
+  font-size: 32px; /* 28px */
+
+  /* Font @Custom */
+  font-weight: bold;
+}
+
+label#below {
+  margin: 5px 0;
+  font-size: 28px; /* 24px */
+
+  /* Font @Custom */
+  font-weight: medium;
+}
+
+/* 搜索窗口 */
+columnview#search-window-column listview row {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}

@@ -1,0 +1,92 @@
+# 此文件并非配置文件!
+# 需要将其复制至 config.toml
+# 此文件仅提供中文注释 原因是 config.toml 会自动刷新 覆盖注释
+
+# waylyrics 从播放器更新位置/元数据的时间间隔
+player-sync-interval = "2s"
+
+# waylyrics 刷新歌词标签的间隔时间
+lyric-update-interval = "20ms"
+
+# waylyrics 用 `weights` (权重) 匹配歌词
+# 如果 `(length-lyric_len).abs() < length_toleration`
+# 那么 waylyrics 将其权重设为零, 标记为最佳选择
+length-toleration = "2s"
+
+# 是否缓存歌词
+# 注意: 持续歌词偏移量取决于这一点
+cache-lyrics = true
+
+# 加载的主题 (<name>.css)
+theme = "default"
+
+# 如果启用, 符合一个或多个 `filter_regex` 的歌词将被隐藏
+enable-filter-regex = false
+
+# 如果启用, 当 waylyrics 发现 `xesam:url` 以 `file://` 开头,
+# 且没有其他提示匹配时, waylyrics 将尝试读取文件名相同的`.lrc`文件。
+enable-local-lyric = true
+
+# 如果启用, 当 waylyrics 加载本地歌词文件时, 会尝试提取已翻译的歌词
+extract-translated-lyric = true
+
+# 如果歌词与这些正则中的任何一个匹配, 则隐藏该歌词
+# 受 LyricX 过滤器列表的启发
+filter-regexies = [
+    "纯音乐，请欣赏",
+    "^作词", "^作詞", "^作曲", "^編曲", "^编曲", "^収録", "^收录", "^演唱", "^歌手", "^歌曲", "^制作", "^製作", "^歌词", "^歌詞", "^翻譯", "^翻译", "^插曲", "^插入歌", "^主题歌", "^主題歌", "^片頭曲", "^片头曲", "^片尾曲", "^SoundTrack", "^アニメ",
+]
+
+# 可用选项: 网易云音乐, QQ音乐, LRCLib
+lyric-search-source = ["网易云音乐"]
+
+# 如果启用, waylyrics 将在空闲时设置 `DEFAULT_TEXT`, 否则什么也不显示
+show-default-text-on-idle = false
+
+# 如果启用, waylyrics 会在 "暂停"(`Pause`) 时显示歌词
+show-lyric-on-pause = false
+
+# 是否运行托盘图标服务
+show-tray-icon = true
+
+# 使用这些名称的播放器将被忽略
+player-name-blacklist = ["firefox", "bilibili"]
+
+# player with these identity will be ignored
+player-identity-blacklist = ["firefox", "bilibili"]
+
+# Gtk 界面使用的颜色方案 -- 浅色(`light`)、深色(`dark`) 或系统(`auto`)
+# Windows 不支持
+color-scheme = "auto"
+
+# 当系统处于黑暗模式时，是否使用 `<name>-dark.css`
+theme-dark-switch = false
+
+[triggers]
+# 聚焦 waylyrics 时的快捷方式
+# 对于全局快捷方式，请安装 `.desktop` 文件
+# 也可在 https://docs.gtk.org/gtk4/ctor.ShortcutTrigger.parse_string.html 检查触发器格式
+
+# 是否显示 GTK+ CSD
+switch_decoration = "<Control>d"
+
+# 重新应用当前主题文件
+reload_theme = "<Control><Shift>t"
+
+# 手动搜索歌词
+search_lyric = "<Control>s"
+
+# 尝试重新获取歌词
+refetch_lyric = "<Alt><Shift>l"
+
+# 是否允许鼠标穿透点击
+switch_passthrough = "<Alt>p"
+
+[qqmusic]
+# QQMusic 配置
+# 使用 `cookies` 作为 `name=value; name1=value1;` 格式
+# waylyrics 将在启动时为 QQMusicApi 服务设置 cookies
+
+# QQMusicApi api url
+# example: "http://127.0.0.1:11451"
+api_base_url = "http://127.0.0.1:3300"
