@@ -52,6 +52,18 @@
 /.config/sparkle
 {{- end }}
 
+{{- if not (lookPath "systemctl") }}
+/.config/systemd
+{{- end }}
+
+{{- if not (lookPath "code") }}
+/.config/code-flags.conf
+/.config/VSCode
+/.config/Code
+/.config/Code - Insiders
+/.config/Code - OSS
+{{- end }}
+
 {{- if not (lookPath "gamemoderun") }}
 /.config/gamemode.ini
 {{- end }}

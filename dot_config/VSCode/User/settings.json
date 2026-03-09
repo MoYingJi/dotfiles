@@ -1,0 +1,56 @@
+{
+    "window.zoomLevel": 1.8,
+
+    "editor.fontSize": 14,
+    "editor.fontFamily": "monospace, 'JetBrainsMono Nerd Font', 'Jetbrains Maple Mono', sans-serif, 'Mi Sans', 'HarmonyOS Sans SC', 'Noto Sans CJK SC'",
+    "editor.fontLigatures": true,
+
+    "editor.mouseWheelZoom": true,
+    "editor.cursorSmoothCaretAnimation": "on",
+    "editor.cursorBlinking": "smooth",
+    "editor.smoothScrolling": true,
+    "editor.wrappingStrategy": "advanced",
+    "editor.formatOnSaveMode": "modificationsIfAvailable",
+
+    "workbench.tree.indent": 20,
+    "workbench.list.smoothScrolling": true,
+
+    "security.workspace.trust.enabled": false,
+
+    "files.associations": {
+        "*.ttml": "xml",
+    },
+
+    "git.autofetch": true,
+    "git.confirmSync": true,
+
+    "python.defaultInterpreterPath": "/usr/bin/python",
+
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++",
+    "C_Cpp.default.cppStandard": "gnu++26",
+
+    "rust-analyzer.check.command": "clippy",
+
+    "commentAnchors.epic.provideAutoCompletion": false,
+    "commentAnchors.tags.provideAutoCompletion": false,
+
+    "redhat.telemetry.enabled": false, // 你想干嘛？
+
+    "github.copilot.nextEditSuggestions.enabled": true,
+
+    "Lingma.methodQuickOperation": false,
+    "Lingma.cloudModelAutoTriggerGenerateLength": "disable",
+    "Lingma.cloudModelManualTriggerGenerateLength": "long",
+    // lingma 会将含有 shebang 但没有后缀的文件视为 plaintext 从而不补全
+    "Lingma.cloudModelLanguagesOrFileExtensions": "",
+
+    "trae.chatLanguage": "cn",
+    "trae.enableCodelens": {
+        "enableInlineDocumentation": false,
+        "enableInlineExplain": false
+    },
+
+    "i18n-ally.displayLanguage": "zh-CN",
+    "i18n-ally.annotations": true,
+    "i18n-ally.extract.keyMaxLength": -1,
+}
