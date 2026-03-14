@@ -103,3 +103,59 @@
 {{- if not (lookPath "localsend") }}
 /.local/share/kio/servicemenus/share-with-localsend.desktop
 {{- end }}
+
+###### 自定义脚本 ######
+
+{{- if not (lookPath "/usr/bin/kate") }}
+/.local/binCmd/kate-hosts
+/.local/binInject/kate
+{{- end }}
+
+{{- if not (lookPath "git") }}
+/.local/binCmd/git-amend-date
+/.local/binScript/ghc
+{{- end }}
+
+
+{{- if not (lookPath "firefox-developer-edition") }}
+/.local/binCmd/firefox
+{{- end }}
+
+{{- if not (lookPath "fcitx5") }}
+/.local/binCmd/input-env
+{{- end }}
+
+{{- if not (lookPath "plasmashell") }}
+/.local/binCmd/kde-restart
+{{- end }}
+
+{{- if not (and (lookPath "archlinux-java") (lookPath "fzf")) }}
+/.local/binScript/chj
+{{- end }}
+
+{{- if not (lookPath "code") }}
+/.local/binScript/codews
+{{- end }}
+
+{{- if not .secret.xiyou_auth }}
+/.local/binScript/fuck-xiyou
+{{- end }}
+
+{{- if not (lookPath "curl") }}
+/.local/binScript/gcurl
+{{- end }}
+
+{{- if not (lookPath "ffmpeg") }}
+/.local/binScript/mkv-merge
+{{- end }}
+
+{{- if not (lookPath "yay") }}
+/.local/binScript/yc
+{{- end }}
+
+###### 服务 ######
+
+{{- if not (lookPath "kwalletd6") }}
+/.config/systemd/user/kwallet-backup.service
+/.local/binService/kwallet-backup
+{{- end }}

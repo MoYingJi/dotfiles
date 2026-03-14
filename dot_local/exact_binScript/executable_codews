@@ -21,12 +21,23 @@
 [[ "$1" != *.code-workspace ]] && NAME="$1.code-workspace" || NAME="$1"
 WORKSPACE_PATH="$WORKSPACES/$NAME"
 
-if [ ! -f "$WORKSPACE_PATH" ]; then
+if [ ! -f "$WORKSPACE_PATH" ] && [ -t 1 ] && [ -t 0 ]; then
     NAME="$(ls "$WORKSPACES" | sed 's/\.code-workspace$//' | fzf "${FZF_ARGS[@]}")"
     WORKSPACE_PATH="$WORKSPACES/$NAME.code-workspace"
 fi
 
-[ -f "$WORKSPACE_PATH" ] || exit 1
+# 验证工作区文件是否存在
+[ -f "$WORKSPACE_PATH" ] || {
+    notify-send \
+        --icon=error \
+        --app-icon=com.visualstudio.code.oss \
+        --app-name="Code Workspace" \
+        "未找到工作区" "$NAME"
+    exit 1
+}
+
+# 处理符号链接
+WORKSPACE_PATH="$(realpath "$WORKSPACE_PATH")"
 
 # 调用 code 打开指定工作区
 $VSCODE_OPEN "$WORKSPACE_PATH"

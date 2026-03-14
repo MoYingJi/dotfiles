@@ -1,3 +1,15 @@
 #!/usr/bin/bash
 
-firefox-developer-edition "$@"
+firefox_variants=(
+    "/usr/bin/firefox" # 为了不和此脚本冲突
+    "firefox-developer-edition"
+)
+
+for variant in "${firefox_variants[@]}"; do
+    if command -v "$variant" &> /dev/null; then
+        exec "$variant" "$@"
+        exit 0
+    fi
+done
+
+exit 1
