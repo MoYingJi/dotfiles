@@ -22,19 +22,29 @@
 
 [ -n "$2" ] && FZF_ARGS+=("--query" "$2")
 
-[ -z "$AUR_HELPER" ] && AUR_HELPER="yay"
+if [ -z "$PM" ]; then
+    command -v yay > /dev/null 2>&1 && PM="yay"
+    command -v paru > /dev/null 2>&1 && PM="paru"
+    command -v pacman > /dev/null 2>&1 && PM="pacman"
+fi
+
+if [ -z "$PM" ]; then
+    echo "Error: 没有找到任何 AUR Helper 或 pacman" >&2
+    exit 1
+fi
 
 PREVIEW_CMD="""
-    $AUR_HELPER -Qs --color=always \"^\\\$0\\\$\"
+    $PM -Qs --color=always \"^\\\$0\\\$\"
     echo
-    $AUR_HELPER $INFO_ARG --color=always \"\\\$0\"
+    $PM $INFO_ARG --color=always \"\\\$0\"
 """
 
 
-r="$($AUR_HELPER $QUERY_ARG | fzf \
+r="$($PM $QUERY_ARG | fzf \
     --multi \
     "${FZF_ARGS[@]}" \
     --preview "bash -c \"$PREVIEW_CMD\" {}"
 )"
 [ -z "$r" ] && exit 0
-$AUR_HELPER $1 $r
+
+$PM $1 $r
