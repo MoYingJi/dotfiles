@@ -5,3 +5,18 @@
 [".config/mpv/scripts/stats.lua"]
     type = "file"
     url = "https://github.com/FinnRaze/mpv-stats-zh/raw/refs/heads/master/stats.lua"
+
+# Shorin Contrib
+# LICENSE: GPL-3.0-only
+[".local/binScript/pac"]
+    type = "file"
+    url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pac"
+    executable = true
+[".local/binScript/pacr"]
+    type = "file"
+    url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacr"
+    executable = true
+[".local/binScript/pacrrr"]
+    type = "file"
+    url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacrrr"
+    executable = true
