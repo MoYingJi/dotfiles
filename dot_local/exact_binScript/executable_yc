@@ -22,11 +22,9 @@
 
 [ -n "$2" ] && FZF_ARGS+=("--query" "$2")
 
-if [ -z "$PM" ]; then
-    command -v yay > /dev/null 2>&1 && PM="yay"
-    command -v paru > /dev/null 2>&1 && PM="paru"
-    command -v pacman > /dev/null 2>&1 && PM="pacman"
-fi
+[ -z "$PM" ] && command -v yay > /dev/null 2>&1 && PM="yay"
+[ -z "$PM" ] && command -v paru > /dev/null 2>&1 && PM="paru"
+[ -z "$PM" ] && command -v pacman > /dev/null 2>&1 && PM="pacman"
 
 if [ -z "$PM" ]; then
     echo "Error: 没有找到任何 AUR Helper 或 pacman" >&2
