@@ -12,14 +12,14 @@
     "editor.wrappingStrategy": "advanced",
     "editor.formatOnSaveMode": "modificationsIfAvailable",
 
+    "files.associations": {
+        "*.ttml": "xml",
+    },
+
     "workbench.tree.indent": 20,
     "workbench.list.smoothScrolling": true,
 
     "security.workspace.trust.enabled": false,
-
-    "files.associations": {
-        "*.ttml": "xml",
-    },
 
     "git.autofetch": true,
     "git.confirmSync": true,

@@ -116,6 +116,10 @@
 /.local/binScript/ghc
 {{- end }}
 
+{{- if not (lookPath "python3") }}
+/.local/binScript/cpu-control
+{{- end }}
+
 
 {{- if not (lookPath "firefox-developer-edition") }}
 /.local/binCmd/firefox

@@ -34,6 +34,7 @@ const domainDirect = [
     "skillsmp.com",
     "stevexmh.net",
     "vuejs.org",
+    "xllmapi.com",
 ]
 
 const domainProxy = [
@@ -44,7 +45,7 @@ const domainProxy = [
 
 
 const prependRules = [
-    "DST-PORT,22,DIRECT", // SSH 端口 22
+    //"DST-PORT,22,DIRECT", // SSH 端口 22
     ...processDirect.map(process => `PROCESS-NAME,${process},DIRECT`),
     ...domainDirect.map(domain => `DOMAIN-SUFFIX,${domain},DIRECT`),
     ...processProxy.map(process => `PROCESS-NAME,${process},PROXY`),

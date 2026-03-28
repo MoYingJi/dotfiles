@@ -1,0 +1,521 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+CPU 核心控制终端
+Author: DeepSeek
+License: MIT
+"""
+
+import os
+import sys
+import glob
+import curses
+import time
+import argparse
+import locale
+import unicodedata
+from typing import List, Dict, Set, Tuple, Optional
+
+# 设置 locale 以支持中文显示
+locale.setlocale(locale.LC_ALL, '')
+
+# ---------- 全局权限标志 ----------
+IS_ROOT = (os.geteuid() == 0)
+
+# ---------- 显示宽度辅助函数 ----------
+def display_len(s: str) -> int:
+    """返回字符串在终端中的显示宽度（全角字符=2，半角=1）"""
+    width = 0
+    for ch in s:
+        eaw = unicodedata.east_asian_width(ch)
+        # F: 全角, W: 宽字符, 宽度2；A: 模糊，通常视为1；其余宽度1
+        if eaw in ('F', 'W'):
+            width += 2
+        else:
+            width += 1
+    return width
+
+def pad_to_width(s: str, width: int) -> str:
+    """
+    将字符串填充到指定显示宽度（右侧补空格）
+    如果字符串显示宽度已超过目标宽度，则截断并添加 '…' 标识
+    """
+    current = display_len(s)
+    if current <= width:
+        return s + ' ' * (width - current)
+    else:
+        # 截断，确保截断后显示宽度 <= width-1，然后加 '…' 占2宽度（全角点）
+        # 简单处理：逐个字符添加直到宽度超出
+        truncated = ""
+        w = 0
+        for ch in s:
+            ch_w = 2 if unicodedata.east_asian_width(ch) in ('F', 'W') else 1
+            if w + ch_w <= width - 2:  # 为 '…' 预留2宽度
+                truncated += ch
+                w += ch_w
+            else:
+                truncated += '…'
+                break
+        return truncated
+
+# ---------- sysfs 辅助函数 ----------
+def read_sysfs(path: str) -> str:
+    try:
+        with open(path, 'r') as f:
+            return f.read().strip()
+    except (IOError, OSError):
+        return ""
+
+def write_sysfs(path: str, value: str) -> bool:
+    try:
+        with open(path, 'w') as f:
+            f.write(value)
+        return True
+    except (IOError, OSError):
+        return False
+
+def get_cpu_online(cpu: int) -> bool:
+    path = f"/sys/devices/system/cpu/cpu{cpu}/online"
+    content = read_sysfs(path)
+    if not content:
+        return True
+    return content == "1"
+
+def set_cpu_online(cpu: int, online: bool) -> bool:
+    if not IS_ROOT:
+        return False
+    path = f"/sys/devices/system/cpu/cpu{cpu}/online"
+    if not os.path.exists(path):
+        return False
+    value = "1" if online else "0"
+    return write_sysfs(path, value)
+
+# ---------- CPU 静态信息读取 ----------
+def get_core_id(cpu: int) -> Optional[int]:
+    path = f"/sys/devices/system/cpu/cpu{cpu}/topology/core_id"
+    content = read_sysfs(path)
+    if content:
+        try:
+            return int(content)
+        except ValueError:
+            pass
+    return None
+
+def get_max_freq_mhz(cpu: int) -> Optional[int]:
+    """返回 MHz 整数，失败返回 None"""
+    path = f"/sys/devices/system/cpu/cpu{cpu}/cpufreq/cpuinfo_max_freq"
+    content = read_sysfs(path)
+    if content:
+        try:
+            khz = int(content)
+            return khz // 1000  # 转换为 MHz
+        except ValueError:
+            pass
+    return None
+
+def get_all_cpus() -> List[int]:
+    cpus = []
+    for path in glob.glob("/sys/devices/system/cpu/cpu[0-9]*"):
+        try:
+            cpu = int(path.split('/cpu')[-1])
+            cpus.append(cpu)
+        except ValueError:
+            continue
+    return sorted(cpus)
+
+def get_online_cpus() -> List[int]:
+    return [cpu for cpu in get_all_cpus() if get_cpu_online(cpu)]
+
+# ---------- 超线程检测（仅在线核心）----------
+def get_physical_cores_online() -> Dict[int, Set[int]]:
+    core_map = {}
+    for cpu in get_online_cpus():
+        core_id = get_core_id(cpu)
+        if core_id is not None:
+            core_map.setdefault(core_id, set()).add(cpu)
+        else:
+            core_map.setdefault(cpu, set()).add(cpu)
+    return core_map
+
+def get_ht_cores_online() -> Set[int]:
+    ht_set = set()
+    core_map = get_physical_cores_online()
+    for core, cpus in core_map.items():
+        if len(cpus) > 1:
+            primary = min(cpus)
+            for cpu in cpus:
+                if cpu != primary:
+                    ht_set.add(cpu)
+    return ht_set
+
+def detect_small_cores_by_freq_online() -> Set[int]:
+    freq_map = {}
+    for cpu in get_online_cpus():
+        freq = get_max_freq_mhz(cpu)
+        if freq is not None:
+            freq_map[cpu] = freq
+    if not freq_map:
+        return set()
+    min_freq = min(freq_map.values())
+    small_cores = {cpu for cpu, f in freq_map.items() if f == min_freq}
+    if len(small_cores) == len(freq_map):
+        return set()
+    return small_cores
+
+def detect_small_cores_manual(cores: List[int]) -> Set[int]:
+    return set(cores)
+
+def get_current_cpu() -> int:
+    try:
+        import ctypes
+        libc = ctypes.CDLL("libc.so.6")
+        return libc.sched_getcpu()
+    except:
+        try:
+            return os.sched_getaffinity(0).pop()
+        except:
+            return 0
+
+def get_architecture_type(ht_cores: Set[int], small_cores: Set[int]) -> str:
+    has_ht = len(ht_cores) > 0
+    has_small = len(small_cores) > 0
+    if has_ht and has_small:
+        return "超线程 + 大小核"
+    elif has_ht:
+        return "超线程"
+    elif has_small:
+        return "大小核"
+    else:
+        return "正常"
+
+# ---------- TUI 主类 ----------
+class CPUTUI:
+    def __init__(self, stdscr, small_cores: Set[int], initial_selected_idx: int = 0):
+        self.stdscr = stdscr
+        self.small_cores = small_cores
+        self.all_cpus = get_all_cpus()
+        self.num_cpus = len(self.all_cpus)
+
+        # 静态信息缓存
+        self.core_id_map = {}
+        self.max_freq_map = {}
+        self.refresh_static_info()
+
+        self.ht_cores = get_ht_cores_online()
+
+        self.selected_idx = initial_selected_idx
+        if self.selected_idx < 0:
+            self.selected_idx = 0
+        if self.selected_idx >= self.num_cpus:
+            self.selected_idx = self.num_cpus - 1
+        self.scroll_offset = 0
+
+        self.message = ""
+        self.message_expire = 0.0
+        self.online_state = {cpu: get_cpu_online(cpu) for cpu in self.all_cpus}
+        self.arch_type = get_architecture_type(self.ht_cores, self.small_cores)
+
+        curses.curs_set(0)
+        self.stdscr.nodelay(0)
+        self.stdscr.timeout(100)
+
+    def refresh_static_info(self):
+        for cpu in self.all_cpus:
+            self.core_id_map[cpu] = get_core_id(cpu)
+            self.max_freq_map[cpu] = get_max_freq_mhz(cpu)
+
+    def set_message(self, msg: str, duration: float = 2.0):
+        self.message = msg
+        self.message_expire = time.time() + duration
+
+    def update_states(self):
+        for cpu in self.all_cpus:
+            self.online_state[cpu] = get_cpu_online(cpu)
+
+    def reload_architecture(self):
+        self.refresh_static_info()
+        self.ht_cores = get_ht_cores_online()
+        self.small_cores = detect_small_cores_by_freq_online()
+        self.arch_type = get_architecture_type(self.ht_cores, self.small_cores)
+        self.set_message("已重新检测超线程和小核（基于在线核心）", 1.5)
+
+    def draw(self):
+        self.stdscr.clear()
+        height, width = self.stdscr.getmaxyx()
+
+        # 标题
+        title = f"CPU 核心控制终端 | 架构: {self.arch_type}"
+        if not IS_ROOT:
+            title += " | 只读模式"
+        self.stdscr.addstr(0, 0, title, curses.A_BOLD | curses.A_UNDERLINE)
+
+        # 定义各列的显示宽度（英文字符宽度）
+        col_cpu = 6
+        col_online = 6
+        col_type = 12
+        col_core_id = 8
+        col_freq = 16
+        # 信息列占剩余宽度
+        col_info = max(10, width - (col_cpu + col_online + col_type + col_core_id + col_freq + 5))
+
+        # 表头（使用填充函数确保对齐）
+        header = (pad_to_width("核心", col_cpu) +
+                  pad_to_width("状态", col_online) +
+                  pad_to_width("类型", col_type) +
+                  pad_to_width("core_id", col_core_id) +
+                  pad_to_width("max_freq (MHz)", col_freq) +
+                  pad_to_width("信息", col_info))
+        self.stdscr.addstr(2, 0, header, curses.A_BOLD)
+
+        # 可见行数
+        visible_rows = height - 5
+
+        # 调整滚动
+        if self.selected_idx < self.scroll_offset:
+            self.scroll_offset = self.selected_idx
+        elif self.selected_idx >= self.scroll_offset + visible_rows:
+            self.scroll_offset = self.selected_idx - visible_rows + 1
+        self.scroll_offset = max(0, min(self.scroll_offset, self.num_cpus - visible_rows))
+
+        row = 3
+        end_idx = min(self.scroll_offset + visible_rows, self.num_cpus)
+        for idx in range(self.scroll_offset, end_idx):
+            cpu = self.all_cpus[idx]
+            online = self.online_state[cpu]
+
+            # 类型
+            cpu_type = "核心"
+            if cpu in self.ht_cores:
+                cpu_type = "超线程"
+            if cpu in self.small_cores:
+                cpu_type = "小核"
+
+            online_str = "在线" if online else "离线"
+            status_color = curses.color_pair(1) if online else curses.color_pair(2)
+
+            # core_id
+            core_id_val = self.core_id_map.get(cpu)
+            core_id_str = str(core_id_val) if core_id_val is not None else "不可读"
+
+            # 频率
+            freq_val = self.max_freq_map.get(cpu)
+            freq_str = str(freq_val) if freq_val is not None else "不可读"
+
+            # 信息
+            info = ""
+            if cpu in self.small_cores:
+                info = "E-小核"
+            elif cpu in self.ht_cores:
+                core_map = get_physical_cores_online()
+                for core, cpus in core_map.items():
+                    if cpu in cpus and len(cpus) > 1:
+                        primary = min(cpus)
+                        info = f"超线程 来自核心 {primary}"
+                        break
+
+            # 构建行，使用显示宽度填充
+            line = (pad_to_width(str(cpu), col_cpu) +
+                    pad_to_width(online_str, col_online) +
+                    pad_to_width(cpu_type, col_type) +
+                    pad_to_width(core_id_str, col_core_id) +
+                    pad_to_width(freq_str, col_freq) +
+                    pad_to_width(info, col_info))
+
+            if idx == self.selected_idx:
+                self.stdscr.addstr(row, 0, line, curses.A_REVERSE)
+            else:
+                self.stdscr.addstr(row, 0, line, status_color)
+            row += 1
+
+        # 指令行
+        if IS_ROOT:
+            instr = ("命令: ↑/↓ 选择核心 | 空格 切换选中核心 | t-超线程 | s-小核 | a-全部开启 | r-刷新 | Esc/q-退出")
+        else:
+            instr = ("命令: ↑/↓ 选择核心 | 空格/t/s/a 需要 root 权限 | r-刷新 | Esc/q-退出")
+        self.stdscr.addstr(height-2, 0, instr, curses.A_REVERSE)
+
+        # 消息行
+        if self.message and time.time() < self.message_expire:
+            self.stdscr.addstr(height-1, 0, self.message[:width-1])
+        else:
+            self.message = ""
+
+        self.stdscr.refresh()
+
+    def request_root_or_exit(self, action_name: str) -> bool:
+        if IS_ROOT:
+            return True
+        msg = f"需要 root 权限才能{action_name}。是否使用 sudo 重新启动？(y/n): "
+        self.stdscr.addstr(curses.LINES-1, 0, msg)
+        self.stdscr.refresh()
+        while True:
+            ch = self.stdscr.getch()
+            if ch == ord('y') or ch == ord('Y'):
+                script_path = os.path.abspath(sys.argv[0])
+                args = [script_path] + sys.argv[1:] + [f"--selected-cpu-idx={self.selected_idx}"]
+                curses.endwin()
+                try:
+                    os.execvp("sudo", ["sudo"] + sys.executable.split() + args)
+                except Exception as e:
+                    print(f"无法提权: {e}", file=sys.stderr)
+                    sys.exit(1)
+            elif ch == ord('n') or ch == ord('N'):
+                self.set_message(f"已取消{action_name}", 1.5)
+                return False
+
+    def toggle_cpu(self, cpu: int) -> bool:
+        if not IS_ROOT:
+            self.request_root_or_exit("切换核心状态")
+            return False
+        current = get_current_cpu()
+        if cpu == current:
+            self.set_message(f"警告：无法关闭当前正在运行的核心 {cpu}", 2.0)
+            return False
+        target = not self.online_state[cpu]
+        if set_cpu_online(cpu, target):
+            self.online_state[cpu] = target
+            self.set_message(f"核心 {cpu} 已{'在线' if target else '离线'}", 1.5)
+            return True
+        else:
+            self.set_message(f"切换核心 {cpu} 失败，可能不支持动态开关", 2.0)
+            return False
+
+    def toggle_ht(self):
+        if not IS_ROOT:
+            self.request_root_or_exit("切换超线程")
+            return
+        any_offline = any(not self.online_state[cpu] for cpu in self.ht_cores)
+        target_online = any_offline
+        current = get_current_cpu()
+        changed = False
+        for cpu in self.ht_cores:
+            if cpu == current:
+                continue
+            if self.online_state[cpu] != target_online:
+                if set_cpu_online(cpu, target_online):
+                    self.online_state[cpu] = target_online
+                    changed = True
+        if changed:
+            self.update_states()
+            self.set_message("超线程核心已全部" + ("在线" if target_online else "离线"), 1.5)
+        else:
+            self.set_message("没有超线程核心可切换", 1.5)
+
+    def toggle_small(self):
+        if not IS_ROOT:
+            self.request_root_or_exit("切换小核")
+            return
+        if not self.small_cores:
+            self.set_message("未检测到小核，请使用 --small-cores 手动指定或按 r 刷新", 2.0)
+            return
+        any_offline = any(not self.online_state[cpu] for cpu in self.small_cores)
+        target_online = any_offline
+        current = get_current_cpu()
+        changed = False
+        for cpu in self.small_cores:
+            if cpu == current:
+                continue
+            if self.online_state[cpu] != target_online:
+                if set_cpu_online(cpu, target_online):
+                    self.online_state[cpu] = target_online
+                    changed = True
+        if changed:
+            self.update_states()
+            self.set_message("小核已全部" + ("在线" if target_online else "离线"), 1.5)
+        else:
+            self.set_message("没有小核可切换", 1.5)
+
+    def enable_all(self):
+        if not IS_ROOT:
+            self.request_root_or_exit("全部开启")
+            return
+        current = get_current_cpu()
+        changed = False
+        for cpu in self.all_cpus:
+            if cpu == current:
+                continue
+            if not self.online_state[cpu]:
+                if set_cpu_online(cpu, True):
+                    self.online_state[cpu] = True
+                    changed = True
+        if changed:
+            self.update_states()
+            self.set_message("所有核心已开启（跳过当前运行核心）", 1.5)
+        else:
+            self.set_message("所有核心已在线", 1.5)
+
+    def run(self):
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+
+        self.update_states()
+
+        while True:
+            self.draw()
+            key = self.stdscr.getch()
+
+            if key == ord('q') or key == ord('Q') or key == 27:
+                break
+            elif key == ord('t') or key == ord('T'):
+                self.toggle_ht()
+            elif key == ord('s') or key == ord('S'):
+                self.toggle_small()
+            elif key == ord('a') or key == ord('A'):
+                self.enable_all()
+            elif key == ord('r') or key == ord('R'):
+                self.reload_architecture()
+                self.update_states()
+                self.all_cpus = get_all_cpus()
+                self.num_cpus = len(self.all_cpus)
+                if self.selected_idx >= self.num_cpus:
+                    self.selected_idx = self.num_cpus - 1
+                if self.selected_idx < 0:
+                    self.selected_idx = 0
+            elif key == ord(' '):
+                if 0 <= self.selected_idx < len(self.all_cpus):
+                    cpu = self.all_cpus[self.selected_idx]
+                    self.toggle_cpu(cpu)
+            elif key == curses.KEY_UP:
+                if self.selected_idx > 0:
+                    self.selected_idx -= 1
+                else:
+                    self.selected_idx = self.num_cpus - 1
+            elif key == curses.KEY_DOWN:
+                if self.selected_idx < self.num_cpus - 1:
+                    self.selected_idx += 1
+                else:
+                    self.selected_idx = 0
+
+def main():
+    parser = argparse.ArgumentParser(description="CPU 核心控制终端")
+    parser.add_argument("--small-cores", type=str, default=None,
+                        help="手动指定小核编号，逗号分隔，例如 4,5,6,7")
+    parser.add_argument("--selected-cpu-idx", type=int, default=0,
+                        help="内部参数，用于保持光标位置")
+    args = parser.parse_args()
+
+    small_cores = set()
+    if args.small_cores:
+        try:
+            cores = [int(x.strip()) for x in args.small_cores.split(',')]
+            small_cores = detect_small_cores_manual(cores)
+            print(f"手动指定小核: {small_cores}")
+        except Exception as e:
+            print(f"解析小核列表失败: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        small_cores = detect_small_cores_by_freq_online()
+        if small_cores:
+            print(f"自动检测到小核 (基于在线核心的最低频率): {small_cores}")
+        else:
+            print("未检测到小核，若存在小核请使用 --small-cores 手动指定或按 r 刷新")
+
+    if not IS_ROOT:
+        print("警告：当前未以 root 运行，进入只读模式，只能查看核心状态，不能修改。")
+        print("如需修改，请使用 sudo 运行或在界面中按相应键提权。")
+
+    curses.wrapper(lambda stdscr: CPUTUI(stdscr, small_cores, args.selected_cpu_idx).run())
+
+if __name__ == "__main__":
+    main()
