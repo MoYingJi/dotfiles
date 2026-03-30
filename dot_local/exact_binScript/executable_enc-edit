@@ -1,0 +1,67 @@
+#!/usr/bin/bash
+
+EDITOR="${EDITOR:-vi}"
+
+ENCRYPTION_CMD="$1"
+DECRYPTION_CMD="$2"
+
+encrypted_file="$3"
+
+if [ -z "$ENCRYPTION_CMD" ]; then
+    echo "Usage: $0 <encryption_command> [decryption_command] [encrypted_file]"
+    exit 1
+fi
+
+if [ -z "$encrypted_file" ] && [ -f "$encrypted_file" ]; then
+    if [ ! -r "$encrypted_file" ] || [ ! -w "$encrypted_file" ]; then
+        echo "Error: Encrypted file '$encrypted_file' is not readable/writable."
+        exit 1
+    fi
+
+    if [ -z "$DECRYPTION_CMD" ]; then
+        echo "Error: Decryption command is required when an encrypted file is provided."
+        exit 1
+    fi
+fi
+
+temp_file="$(mktemp)"
+
+if [ -n "$encrypted_file" ] && [ -f "$encrypted_file" ]; then
+    if ! $DECRYPTION_CMD < "$encrypted_file" > "$temp_file"; then
+        echo "Error: Decryption failed for '$encrypted_file'."
+        rm -f "$temp_file"
+        exit 1
+    fi
+fi
+
+$EDITOR "$temp_file"
+
+original_content="$(cat "$temp_file")"
+encrypted_content="$($ENCRYPTION_CMD < "$temp_file" || {
+    echo "Error: Encryption command failed."
+    rm -f "$temp_file"
+    exit 1
+})"
+
+if [ -n "$encrypted_file" ]; then
+    if ! cat <<< "$encrypted_content" > "$encrypted_file"; then
+        echo "Error: Encryption failed for '$encrypted_file'."
+        rm -f "$temp_file"
+        exit 1
+    fi
+fi
+
+rm -f "$temp_file"
+
+color_text() { echo -e -n "\033[$1;$2m$3\033[0m"; }
+
+color_text "1" "34" "加密命令：" && echo "$ENCRYPTION_CMD"
+[ -n "$DECRYPTION_CMD" ] && color_text "1" "34" "解密命令：" && echo "$DECRYPTION_CMD"
+[ -n "$encrypted_file" ] && color_text "1" "34" "目标文件：" && echo "$encrypted_file"
+
+echo
+color_text "1" "34" "原内容："; echo
+echo "$original_content"
+echo
+color_text "1" "34" "加密后内容："; echo
+echo "$encrypted_content"

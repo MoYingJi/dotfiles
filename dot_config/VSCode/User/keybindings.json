@@ -6,4 +6,9 @@
         "command": "editor.action.inlineSuggest.trigger",
         "when": "editorFocus",
     },
+    {
+        // 打开 Copilot Chat Debug
+        "key": "ctrl+shift+alt+d",
+        "command": "github.copilot.debug.showChatLogView",
+    },
 ]

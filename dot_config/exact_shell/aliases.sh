@@ -36,6 +36,8 @@ alias bat-which='do-which bat'
 alias edit-which='do-which $EDITOR'
 alias kate-which='do-which kate'
 
+alias base64-edit='enc-edit "base64" "base64 -d"'
+
 alias watch-mem='watch -n 2   -- free -h'
 alias watch-nvi='watch -n 0.5 -- nvidia-smi'
 alias watch-nft='watch -n 0.2 -- sudo nft list ruleset'
