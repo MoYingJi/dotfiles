@@ -45,7 +45,11 @@ const domainProxy = [
 
 
 const prependRules = [
-    //"DST-PORT,22,DIRECT", // SSH 端口 22
+    // SSH 端口 22
+    // 如果是 Git SSH 连接 GitHub，这里不管是 DIRECT 还是 PROXY 的体验都不好
+    // 所以交给软件（如果能自由开关规则）
+    "DST-PORT,22,DIRECT",
+
     ...processDirect.map(process => `PROCESS-NAME,${process},DIRECT`),
     ...domainDirect.map(domain => `DOMAIN-SUFFIX,${domain},DIRECT`),
     ...processProxy.map(process => `PROCESS-NAME,${process},PROXY`),
