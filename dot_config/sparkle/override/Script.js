@@ -10,6 +10,7 @@ const processProxy = [
 ]
 
 const domainDirect = [
+    // 一些杂七杂八的直连域名
     "archlinux.org",
     "archlinuxcn.org",
     "bgithub.xyz",
@@ -35,6 +36,9 @@ const domainDirect = [
     "stevexmh.net",
     "vuejs.org",
     "xllmapi.com",
+
+    // JetBrains Account
+    "account.jetbrains.com",
 ]
 
 const domainProxy = [

@@ -16,6 +16,12 @@
         "*.ttml": "xml",
     },
 
+    "terminal.integrated.defaultProfile.linux": "fish",
+    // 让 AI 插件使用 bash 以获得更好的兼容性
+    "terminal.integrated.automationProfile.linux": {
+        "path": "/usr/bin/bash"
+    },
+
     "workbench.tree.indent": 20,
     "workbench.list.smoothScrolling": true,
 

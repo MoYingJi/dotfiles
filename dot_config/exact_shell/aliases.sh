@@ -5,9 +5,6 @@
 # Profile
 alias ref='_REF=1 source $COMMON_SHELL_PROFILE_DIR/profile.sh'
 
-alias ege='edit /etc/environment'
-alias egp='edit /etc/profile'
-
 alias e-kate='export EDITOR="kate -b"'
 alias e-nvim='export EDITOR="nvim"'
 
@@ -89,9 +86,8 @@ alias bilivideo='cd $(xdg-user-dir VIDEOS)/哔哩哔哩'
 alias pkgs='cd $(xdg-user-dir PUBLICSHARE)/packages'
 
 ## 文件
-alias hosts='edit /etc/hosts'
-alias fstab='edit /etc/fstab'
-alias epacman='edit /etc/pacman.conf'
+alias fstab='$EDITOR /etc/fstab'
+alias epacman='$EDITOR /etc/pacman.conf'
 
 ## 其它
 

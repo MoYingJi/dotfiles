@@ -11,6 +11,12 @@ items:
       type: local
       global: true
 
+    - name: Private Rules Script
+      id: private
+      ext: js
+      type: local
+      global: true
+
     - name: Global Merge
       id: Merge
       ext: yaml

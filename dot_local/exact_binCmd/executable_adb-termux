@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+
+TERMUX_VERSION="${TERMUX_VERSION:-0.118.2}"
+
+adb shell -t "run-as com.termux sh -c \"cd /data/data/com.termux/files/home && export PREFIX=/data/data/com.termux/files/usr && export PATH=\\\$PREFIX/bin LD_PRELOAD=\\\$PREFIX/lib/libtermux-exec-ld-preload.so HOME=/data/data/com.termux/files/home && export TERMUX_IS_DEBUGGABLE_BUILD=1 TERMUX_APP__BUILD_DATA_DIR=/data/data/com.termux TERMUX_MAIN_PACKAGE_FORMAT=debian TERMUX__HOME=\\\$HOME TERMUX_VERSION=$TERMUX_VERSION TERMUX__PREFIX=\\\$PREFIX TERMUX_APP__LEGACY_DATA_DIR=/data/data/com.termux TERMUX__ROOTFS=/data/data/com.termux/files TERMUX_APP_PID=0 TERMUX_APP__DATA_DIR=/data/user/0/com.termux && login\""

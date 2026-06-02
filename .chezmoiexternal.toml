@@ -12,10 +12,10 @@
     type = "file"
     url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pac"
     executable = true
-[".local/binScript/pacr"]
-    type = "file"
-    url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacr"
-    executable = true
+# [".local/binScript/pacr"]
+#     type = "file"
+#     url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacr"
+#     executable = true
 [".local/binScript/pacrrr"]
     type = "file"
     url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacrrr"
