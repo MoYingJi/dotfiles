@@ -16,6 +16,18 @@
         "*.ttml": "xml",
     },
 
+    "json.schemaDownload.trustedDomains": {
+        "https://developer.microsoft.com/json-schemas/": true,
+        "https://json-schema.org/": true,
+        "https://json.schemastore.org/": true,
+        "https://models.dev/model-schema.json": true,
+        "https://opencode.ai/config.json": true,
+        "https://raw.githubusercontent.com/devcontainers/spec/": true,
+        "https://raw.githubusercontent.com/microsoft/vscode/": true,
+        "https://schemastore.azurewebsites.net/": true,
+        "https://www.schemastore.org/": true
+    },
+
     "terminal.integrated.defaultProfile.linux": "fish",
     // 让 AI 插件使用 bash 以获得更好的兼容性
     "terminal.integrated.automationProfile.linux": {
@@ -55,6 +67,8 @@
         "enableInlineDocumentation": false,
         "enableInlineExplain": false
     },
+
+    "oaicopilot.commitLanguage": "Chinese (Simplified)",
 
     "i18n-ally.displayLanguage": "zh-CN",
     "i18n-ally.annotations": true,

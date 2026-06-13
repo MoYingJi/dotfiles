@@ -1,10 +1,6 @@
 #!/usr/bin/bash
 
-# 只允许兼容 alias a='b' 这种形式的 shell 调用！
-
 # Profile
-alias ref='_REF=1 source $COMMON_SHELL_PROFILE_DIR/profile.sh'
-
 alias e-kate='export EDITOR="kate -b"'
 alias e-nvim='export EDITOR="nvim"'
 

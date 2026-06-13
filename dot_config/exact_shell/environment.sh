@@ -1,13 +1,13 @@
 #!/usr/bin/bash
 #shellcheck disable=SC2155
 
-# 只允许兼容 export a="b" 这种形式的 shell 调用！
+# === HOME === #
 
-# Home Path
-export PNPM_HOME="$HOME/.local/share/pnpm"
-export PATH="$PNPM_HOME:$PATH"
+# pnpm home
+command -v pnpm >/dev/null 2>&1 && export PNPM_HOME="$HOME/.local/share/pnpm"
+test -n "$PNPM_HOME"            && export PATH="$PNPM_HOME/bin:$PATH"
 
-# Path
+# === PATH === #
 export PATH="$HOME/.local/bin/:$PATH"
 export PATH="$HOME/.local/binInject/:$PATH"
 export PATH="$HOME/.local/binCmd/:$PATH"
