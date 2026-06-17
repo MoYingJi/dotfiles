@@ -1,14 +1,14 @@
 #!/usr/bin/fish
 
-[ -z "$XDG_CONFIG_DIR" ] && set XDG_CONFIG_DIR "$HOME/.config"
+[ -z "$XDG_CONFIG_HOME" ] && set XDG_CONFIG_HOME "$HOME/.config"
 
 test ! -e "$HOME/.x-cmd.root/local/data/fish/rc.fish" || source "$HOME/.x-cmd.root/local/data/fish/rc.fish"
 test -f "$HOME/.xlings/config/shell/xlings-profile.fish"; and source "$HOME/.xlings/config/shell/xlings-profile.fish"
 
-set SPEC_SHELL_PROFILE $XDG_CONFIG_DIR/fish/config.fish
+set SPEC_SHELL_PROFILE $XDG_CONFIG_HOME/fish/config.fish
 export SPEC_SHELL_PROFILE
 
-set COMMON_SHELL_PROFILE_DIR $XDG_CONFIG_DIR/shell
+set COMMON_SHELL_PROFILE_DIR $XDG_CONFIG_HOME/shell
 export COMMON_SHELL_PROFILE_DIR
 source $COMMON_SHELL_PROFILE_DIR/profile.sh
 
