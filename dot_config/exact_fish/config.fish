@@ -18,7 +18,7 @@ end
 
 
 function clear
-    /usr/bin/clear
+    command clear
     fish_greeting
 end
 
@@ -36,9 +36,12 @@ function mkcd -d "创建目录并进入"
     cd $argv[1]
 end
 
-# function rm
-#     echo "主人... 你又在乱删东西了，不好的习惯喵！"
-#     echo "要用 trash 移动到回收站喵！我帮你喵"
-#     echo -e "\e[90m > trash $argv \e[0m"
-#     trash $argv
-# end
+function incognito -d "切换无痕模式"
+    if set -q fish_history
+        set -ge fish_history
+        echo "已退出无痕模式"
+    else
+        set -g fish_history ""
+        echo "已进入无痕模式"
+    end
+end

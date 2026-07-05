@@ -7,6 +7,16 @@
 /.local/share/waylyrics
 {{- end }}
 
+{{- if not (lookPath "fcitx5") }}
+/.config/fcitx5
+/.local/share/fcitx5
+{{- end }}
+
+{{- if not (and (lookPath "ffmpeg") (lookPath "ffprobe")) }}
+/.local/share/applications/ffprobe-output.desktop
+/.local/binScript/ff-interactive
+{{- end }}
+
 ###### / ######
 
 {{- if not (lookPath "bash") }}
@@ -86,10 +96,6 @@
 
 ###### /.local/share/applications ######
 
-{{- if not (lookPath "ffprobe") }}
-/.local/share/applications/ffprobe-output.desktop
-{{- end }}
-
 {{- if not (lookPath "pacman") }}
 /.local/share/applications/pacman-install.desktop
 {{- end }}
@@ -139,10 +145,6 @@
 
 {{- if not (lookPath "code") }}
 /.local/binScript/codews
-{{- end }}
-
-{{- if not .secret.xiyou_auth }}
-/.local/binScript/fuck-xiyou
 {{- end }}
 
 {{- if not (lookPath "curl") }}

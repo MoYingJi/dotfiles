@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+
+[ "$#" -eq 1 ] || { echo "Usage: $0 <file>"; exit 1; }
+
+shell="${SHELL:-"$(which bash)"}"
+file="$1"
+
+export file
+
+ffprobe -hide_banner -i "$file"
+
+echo
+
+case "$shell" in
+    *fish)
+        $shell --init-command "$(cat << EOF
+function fish_greeting
+end
+
+function ff
+    ffmpeg -hide_banner -i "\$file" \$argv
+end
+
+EOF
+        )"
+        ;;
+    *)
+        $shell
+        ;;
+esac

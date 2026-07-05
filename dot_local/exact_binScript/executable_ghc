@@ -17,4 +17,15 @@ repo_name="${repo_name#"git@github.com:"}"
 
 repo_name="${repo_name%".git"}"
 
-git clone "git@github.com:$repo_name.git" "${git_args[@]}"
+if command -v gh >/dev/null 2>&1; then
+    gh repo clone "$repo_name" -- "${git_args[@]}"
+    exit $?
+fi
+
+if command -v git >/dev/null 2>&1; then
+    git clone "git@github.com:$repo_name.git" "${git_args[@]}"
+    exit $?
+fi
+
+echo "Error: Neither 'gh' nor 'git' command is available. Please install one of them to clone the repository."
+exit 1
