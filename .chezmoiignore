@@ -85,6 +85,10 @@
 /.config/Code - OSS
 {{- end }}
 
+{{- if not (lookPath "wireplumber") }}
+/.config/wireplumber
+{{- end }}
+
 {{- if not (lookPath "gamemoderun") }}
 /.config/gamemode.ini
 {{- end }}

@@ -3,7 +3,6 @@
 -- LICENSE: ARR
 
 local mp = require "mp"
-local msg = require "mp.msg"
 local options = require "mp.options"
 
 -- 配置
@@ -33,7 +32,7 @@ local original_speed = 1.0
 local speed_changed = false
 
 -- 处理按键事件的函数
-function on_key(event)
+local function on_key(event)
     local event_type = event.event -- "down", "repeat", "up"
 
     if event_type == "down" then
