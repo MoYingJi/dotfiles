@@ -4,25 +4,33 @@
 
 shell="${SHELL:-"$(which bash)"}"
 file="$1"
-
 export file
 
-ffprobe -hide_banner -i "$file"
+ffmpeg_color="$(command -v ffmpeg-color)"
+export ffmpeg_color
 
-echo
+if [ -n "$ffmpeg_color" ]; then
+    ffprobe -hide_banner -i "$file" 2> >("$ffmpeg_color" --pipe >&2)
+else
+    ffprobe -hide_banner -i "$file"
+fi
+
+echo >&2
 
 case "$shell" in
     *fish)
         $shell --init-command "$(cat << EOF
-function fish_greeting
-end
+function fish_greeting; end
 
 function ff
-    ffmpeg -hide_banner -i "\$file" \$argv
+    if test -n "\$ffmpeg_color"
+        begin; ffmpeg -hide_banner -i "\$file" \$argv 2>&1 >&3 | "\$ffmpeg_color" --pipe >&2; end 3>&1
+    else
+        ffmpeg -hide_banner -i "\$file" \$argv
+    end
 end
-
 EOF
-        )"
+)"
         ;;
     *)
         $shell

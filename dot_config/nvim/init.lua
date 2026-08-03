@@ -6,4 +6,5 @@ require("config.nvim")
 
 -- 自定义脚本
 require("scripts.commands")
+require("scripts.fix-lang")
 require("scripts.im-switcher")

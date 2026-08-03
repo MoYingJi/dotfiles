@@ -2,8 +2,8 @@
 
 const processDirect = [
     "qbittorrent",
-    // "sparkle",
     "SPlayer",
+    "SPlayer-Next",
 ]
 
 const processProxy = [
@@ -32,6 +32,7 @@ const domainDirect = [
     // "open.spotify.com",
     "outlook.live.com",
     "outlook.live.net",
+    "prts.wiki",
     "skillsmp.com",
     "stevexmh.net",
     "vuejs.org",

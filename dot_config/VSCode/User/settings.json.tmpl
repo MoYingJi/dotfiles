@@ -1,0 +1,20 @@
+{{- /* 1. 动态获取当前模板所在目录的绝对路径 */ -}}
+{{- $templateDir := dir .chezmoi.sourceFile }}
+{{- $confDir := joinPath .chezmoi.sourceDir $templateDir "settings.json.d" }}
+
+{{- /* 2. 匹配 settings.json.d 目录下所有的 .json 文件 */ -}}
+{{- $pattern := joinPath $confDir "**/*.json{,c}" }}
+{{- $files := glob $pattern }}
+
+{{- /* 3. 初始化空字典，遍历并合并所有 JSON 文件 */ -}}
+{{- $merged := dict }}
+{{- range $file := $files }}
+  {{- /* 读取文件内容并解析为字典对象 */ -}}
+  {{- $content := include $file | fromJsonc }}
+  
+  {{- /* 使用 mergeOverwrite 进行深度合并（右侧覆盖左侧） */ -}}
+  {{- $merged = mergeOverwrite $merged $content }}
+{{- end }}
+
+{{- /* 4. 将最终合并的字典格式化为标准 JSON 并输出 */ -}}
+{{ $merged | toPrettyJson "    " }}

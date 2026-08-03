@@ -1,4 +1,6 @@
 {
+    "$schema": "vscode://schemas/settings/user",
+
     "window.zoomLevel": 1.8,
 
     "editor.fontSize": 14,

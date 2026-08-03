@@ -10,3 +10,6 @@ opt.expandtab = true
 
 -- 行号
 opt.number = true
+
+-- Neovide
+opt.guifont = "monospace"

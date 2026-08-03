@@ -1,0 +1,936 @@
+#!/usr/bin/env python3
+"""
+ffmpeg-color v2 — 词法分析驱动的 ffmpeg/ffprobe 输出着色器。
+
+核心思路：先 tokenize（像编程语言 lexer 一样把一行拆成语义 token），
+再 render（根据 token 类型映射颜色），绝不会出现「着色后再被正则误匹配」的问题。
+
+用法:
+    ffmpeg-color -i movie.mp4                       # 自动 ffprobe 模式
+    ffmpeg-color -i in.mp4 -c:v libx264 out.mp4     # 自动 ffmpeg 模式
+    ffprobe -show_streams f.mp4 | ffmpeg-color --pipe
+    ffmpeg-color --help
+"""
+
+import sys, os, re, subprocess, signal, threading, queue
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Token 类型
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TT:
+    """Token types — 每种代表一种语义单元。"""
+    TEXT       = 'text'
+    PUNCT      = 'punct'
+    DIM        = 'dim'
+    BOLD       = 'bold'
+    # 结构
+    TAG        = 'tag'           # [STREAM], [FORMAT]
+    INPUT_HDR  = 'input_hdr'     # Input #0
+    OUTPUT_HDR = 'output_hdr'    # Output #0
+    SECTION    = 'section'       # Stream mapping:
+    CONFIG     = 'config'        # configuration: ...
+    FILENAME   = 'filename'
+    FMT_NAME   = 'fmt_name'
+    # 流信息
+    STREAM_ID  = 'stream_id'     # Stream #0:0
+    LANG       = 'lang'          # (und)
+    VIDEO      = 'video'         # Video
+    AUDIO      = 'audio'         # Audio
+    SUBTITLE   = 'subtitle'      # Subtitle
+    DATA       = 'data_stream'   # Data
+    ATTACH     = 'attach_stream' # Attachment
+    CODEC      = 'codec'         # h264, aac, ...
+    PROFILE    = 'profile'       # (High 4:4:4 Predictive)
+    CODEC_TAG  = 'codec_tag'     # (avc1 / 0x31637661)
+    PIXFMT     = 'pixfmt'        # yuv420p
+    SCAN       = 'scan'          # (progressive)
+    RESOLUTION = 'resolution'    # 1920x1080
+    ASPECT     = 'aspect'        # [SAR 1:1 DAR 16:9]
+    BITRATE    = 'bitrate'       # 5000 kb/s
+    FPS        = 'fps'           # 25 fps
+    TBASE      = 'tbase'         # 25 tbr, 12800 tbn
+    CHANS      = 'channels'      # mono, stereo, 5.1
+    SRATE      = 'sample_rate'   # 44100 Hz
+    SFMT       = 'sample_fmt'    # fltp, s16
+    QUALITY    = 'quality'       # q=2-31
+    FLAG       = 'flag'          # (default)
+    # 键值对
+    KEY        = 'key'           # codec_name
+    KEY_HI     = 'key_hi'        # 重要 key（codec_name, width, ...）
+    VALUE      = 'value'
+    HEX        = 'hex'           # 0x31637661
+    NUM        = 'num'           # 纯数字
+    # 元数据
+    MKEY       = 'mkey'          # handler_name:
+    MVAL       = 'mval'          # VideoHandler
+    # 进度
+    PK         = 'prog_key'      # frame=
+    PV         = 'prog_val'      # 25
+    # 语义值
+    TIME       = 'time'          # 00:00:01.00
+    DURATION   = 'duration'
+    # 状态
+    ERROR      = 'error'
+    WARNING    = 'warning'
+    HINT       = 'hint'          # Press [q] to stop
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ANSI 颜色
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class A:
+    """ANSI 转义码常量。"""
+    R   = '\033[0m'
+    B   = '\033[1m'
+    D   = '\033[2m'
+    BLK = '\033[30m';  RED  = '\033[31m'; GRN = '\033[32m'; YEL = '\033[33m'
+    BLU = '\033[34m';  MAG  = '\033[35m'; CYN = '\033[36m'; WHT = '\033[37m'
+    GRY = '\033[90m';  LRED = '\033[91m'; LGRN= '\033[92m'; LYEL= '\033[93m'
+    LBLU= '\033[94m';  LMAG = '\033[95m'; LCYN= '\033[96m'; LWHT= '\033[97m'
+
+
+def _enable_vt():
+    """Windows 10+ 启用虚拟终端。"""
+    if sys.platform != 'win32':
+        return
+    try:
+        import ctypes as ct
+        k = ct.windll.kernel32
+        for hid in (-11, -12):
+            h = k.GetStdHandle(hid)
+            if h:
+                m = ct.c_ulong()
+                k.GetConsoleMode(h, ct.byref(m))
+                k.SetConsoleMode(h, m.value | 4)
+    except Exception:
+        pass
+
+
+# ─── 颜色开关 ────────────────────────────────────────────────────────────────
+
+_on = None
+
+def _ok():
+    global _on
+    if _on is None:
+        _on = (not os.environ.get('NO_COLOR')) and (
+            bool(os.environ.get('FORCE_COLOR')) or
+            os.environ.get('TERM') not in ('dumb', '', None) or
+            sys.platform == 'win32'
+        )
+    return _on
+
+def _a(text, *codes):
+    """给 text 包裹 ANSI 前后缀。"""
+    return (''.join(codes) + text + A.R) if _ok() and codes else text
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 主题：Token 类型 → 颜色
+# ═══════════════════════════════════════════════════════════════════════════════
+
+THEME = {
+    TT.TEXT:       (),
+    TT.PUNCT:      (A.GRY,),
+    TT.DIM:        (A.D,),
+    TT.BOLD:       (A.B,),
+    TT.TAG:        (A.LCYN,),
+    TT.INPUT_HDR:  (A.LBLU,),
+    TT.OUTPUT_HDR: (A.LGRN,),
+    TT.SECTION:    (A.LBLU,),
+    TT.CONFIG:     (A.BLU,),
+    TT.FILENAME:   (A.LWHT,),
+    TT.FMT_NAME:   (A.LYEL,),
+    TT.STREAM_ID:  (A.D,),
+    TT.LANG:       (A.GRY,),
+    TT.VIDEO:      (A.B, A.LCYN),
+    TT.AUDIO:      (A.B, A.LGRN),
+    TT.SUBTITLE:   (A.B, A.LYEL),
+    TT.DATA:       (A.B, A.LMAG),
+    TT.ATTACH:     (A.B, A.LMAG),
+    TT.CODEC:      (A.B, A.LWHT),
+    TT.PROFILE:    (A.D,),
+    TT.CODEC_TAG:  (A.D,),
+    TT.PIXFMT:     (A.CYN,),
+    TT.SCAN:       (A.D,),
+    TT.RESOLUTION: (A.LMAG,),
+    TT.ASPECT:     (A.D,),
+    TT.BITRATE:    (A.LMAG,),
+    TT.FPS:        (A.LMAG,),
+    TT.TBASE:      (A.D,),
+    TT.CHANS:      (A.LMAG,),
+    TT.SRATE:      (A.LMAG,),
+    TT.SFMT:       (A.CYN,),
+    TT.QUALITY:    (A.D,),
+    TT.FLAG:       (A.D,),
+    TT.KEY:        (A.CYN,),
+    TT.KEY_HI:     (A.LCYN,),
+    TT.VALUE:      (),
+    TT.HEX:        (A.D,),
+    TT.NUM:        (A.LMAG,),
+    TT.MKEY:       (A.CYN,),
+    TT.MVAL:       (A.BLU,),
+    TT.PK:         (A.LCYN,),
+    TT.PV:         (A.LGRN,),
+    TT.TIME:       (A.LGRN,),
+    TT.DURATION:   (A.LMAG,),
+    TT.ERROR:      (A.LRED,),
+    TT.WARNING:    (A.LYEL,),
+    TT.HINT:       (A.D,),
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 知识库
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CODECS = frozenset({
+    'h264','h265','hevc','vp9','vp8','av1','avc','mpeg4',
+    'aac','mp3','opus','flac','vorbis','ac3','eac3','dts',
+    'pcm_s16le','pcm_s24le','pcm_s32le','pcm_f32le','pcm_u8','pcm_s16be','pcm_s24be',
+    'libx264','libx265','copy','xvid','divx','h263','theora',
+    'wav','alac','truehd','ass','ssa','srt','mov_text','subrip','webvtt','dvdsub',
+    'mjpeg','png','tiff','gif','rawvideo','wrapped_avframe',
+    'utvideo','prores','prores_ks','dnxhd','dnxhr','v210',
+    'libvpx-vp9','libaom-av1','libfdk-aac','libmp3lame','libopus',
+    'libspeex','flv1','wmv3','vc1','mpeg2video','mpeg1video',
+    'h264_qsv','hevc_qsv','h264_nvenc','hevc_nvenc',
+    'h264_vaapi','hevc_vaapi','h264_v4l2m2m','text','none',
+    'timed_id3','bin_data','dvd_nav','dvbsub','dvb_teletext',
+    'eac3','mlp','truehd','dca','g722','g726','adpcm_ima_wav',
+    'pcm_mulaw','pcm_alaw','sbc','msbc','aptx','aac_latm',
+})
+
+PIXFMTS = frozenset({
+    'yuv420p','yuv422p','yuv444p','yuv410p','yuv411p','yuvj420p','yuvj422p','yuvj444p',
+    'yuv420p10le','yuv422p10le','yuv444p10le','yuv420p12le','yuv422p12le','yuv444p12le',
+    'nv12','nv21','nv16','nv20le','nv24',
+    'rgb24','bgr24','rgba','bgra','argb','abgr','rgb48le','bgr48le',
+    'pal8','gray','gray8','gray16le','gray10le','gray12le',
+    'gbrp','gbrp10le','gbrp12le','gbrp16le',
+    'yuva420p','yuva422p','yuva444p','yuva420p10le','yuva422p10le','yuva444p10le',
+    '0rgb','b0rg','rgb0','bgr0','x2rgb10le','x2bgr10le',
+    'yuv420p9le','yuv422p9le','yuv444p9le',
+})
+
+SAMPLE_FMTS = frozenset({
+    's16','s32','s64','u8','u16','u32','u64',
+    'flt','dbl','s16p','s32p','fltp','dblp','u8p','s64p','u16p','u32p',
+})
+
+CHAN_LAYOUTS = frozenset({
+    'mono','stereo','2.1','3.0','3.1','4.0','4.1',
+    '5.0','5.1','5.1(side)','6.0','6.1','7.0','7.1',
+    '7.1(wide)','octagonal','hexagonal','downmix',
+})
+
+IMPORTANT_KEYS = frozenset({
+    'codec_name','codec_type','codec_long_name','width','height',
+    'coded_width','coded_height','duration','bit_rate','max_bit_rate',
+    'sample_rate','channels','channel_layout','pix_fmt','profile',
+    'format_name','format_long_name','nb_streams','nb_programs',
+    'size','start_time','r_frame_rate','avg_frame_rate',
+    'display_aspect_ratio','sample_aspect_ratio','level',
+    'color_range','color_space','color_transfer','color_primaries',
+    'bits_per_raw_sample','bits_per_sample','nb_frames',
+    'probe_score','has_b_frames','is_avc','nal_length_size',
+    'time_base','start_pts','duration_ts',
+})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 工具函数
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _split_detail(s):
+    """按逗号分割流详情，但尊重 () 和 [] 内的逗号。"""
+    parts, cur, depth = [], [], 0
+    for ch in s:
+        if ch in '([': depth += 1; cur.append(ch)
+        elif ch in ')]': depth -= 1; cur.append(ch)
+        elif ch == ',' and depth == 0:
+            parts.append(''.join(cur).strip()); cur = []
+        else:
+            cur.append(ch)
+    if cur:
+        parts.append(''.join(cur).strip())
+    return [p for p in parts if p]
+
+
+# 编译好的 codec 正则（按长度降序，优先匹配长的）
+_CODEC_RE = re.compile(
+    r'\b(' + '|'.join(sorted(CODECS, key=len, reverse=True)) + r')\b',
+    re.IGNORECASE
+)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tokenizer：把一行文本拆成 [(text, TT), ...] 列表
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── 预编译正则 ──────────────────────────────────────────────────────────────
+
+_RE_STREAM = re.compile(
+    r'^(\s*)'
+    r'Stream\s+(#\d+:\d+)'          # Stream #0:0
+    r'(?:\[0x[0-9a-fA-F]+\])?'       # 可选 [0x1]
+    r'(?:\((\w+)\))?'                # 可选 (und)
+    r':\s+'
+    r'(Video|Audio|Subtitle|Data|Attachment)'  # 流类型
+    r':\s*'
+    r'(.*)$'                          # 剩余全部
+)
+
+_RE_INPUT = re.compile(
+    r'^(\s*)(Input|Output)\s+(#\d+),\s*(.*?),\s*from\s+\x27(.*)\x27:\s*$'
+)
+
+_RE_DUR = re.compile(
+    r'^(\s*)Duration:\s*(\S+),\s*start:\s*(\S+),\s*bitrate:\s*(.*?)\s*$'
+)
+
+_RE_KV = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)=(.*)$')
+
+_RE_TAG = re.compile(r'^\[(\w+)\]\s*(.*)$')
+
+_RE_META = re.compile(r'^(\s{2,})([\w][\w ]*?)(\s*:\s*)(.*?)\s*$')
+# 续行：只有缩进 + 冒号 + 值（无 key），如多行 LYRICS / description
+_RE_META_CONT = re.compile(r'^(\s+)(:\s*)(.*?)\s*$')
+
+_RE_PROG_K = re.compile(r'(frame|size|time|bitrate|speed|fps|q|Lsize)=')
+
+
+# ─── Stream 详情段分类 ────────────────────────────────────────────────────────
+
+def _classify_seg(seg, stype):
+    """把 Stream 详情中的一个逗号分段分类为 token。
+    支持「复合段」如 '320x240 [SAR 1:1 DAR 4:3]' 或 '72 kb/s (default)'。"""
+
+    # ── 纯括号段 ──
+
+    # (default), (und), (attached_pic)
+    if re.match(r'^\([a-z][a-z_]*(?:pic)?\)$', seg):
+        return [(seg, TT.FLAG)]
+
+    # (avc1 / 0x31637661)  ← codec tag
+    if re.match(r'^\(\w+\s*/\s*0x[0-9a-fA-F]+\)$', seg):
+        return [(seg, TT.CODEC_TAG)]
+
+    # (任意内容)  ← profile
+    if seg.startswith('(') and seg.endswith(')'):
+        return [(seg, TT.PROFILE)]
+
+    # [SAR 1:1 DAR 16:9]  ← 纯 aspect（独立段）
+    if seg.startswith('[') and seg.endswith(']'):
+        return [(seg, TT.ASPECT)]
+
+    # ── 复合段：分辨率 + aspect ──
+    # '320x240 [SAR 1:1 DAR 4:3]' 或 '1920x1080'
+    m = re.match(r'^(\d{2,5}x\d{2,5})(\s+\[.*\])?$', seg)
+    if m:
+        toks = [(m.group(1), TT.RESOLUTION)]
+        if m.group(2):
+            toks.append((m.group(2), TT.ASPECT))
+        return toks
+
+    # ── 像素格式（可带 scan type）──
+    m = re.match(r'^(\w[\w\d]*)((?:\([a-z]+\))?)$', seg)
+    if m and m.group(1) in PIXFMTS:
+        toks = [(m.group(1), TT.PIXFMT)]
+        if m.group(2):
+            toks.append((m.group(2), TT.SCAN))
+        return toks
+
+    # ── 复合段：比特率 + flag ──
+    # '72 kb/s (default)'
+    m = re.match(r'^([\d.]+\s*kb/s)(\s+\([a-z][a-z_]*(?:pic)?\))?$', seg)
+    if m:
+        toks = [(m.group(1), TT.BITRATE)]
+        if m.group(2):
+            toks.append((m.group(2), TT.FLAG))
+        return toks
+
+    # ── 复合段：时间基 + flag ──
+    # '12800 tbn (default)'
+    m = re.match(r'^(\d+\s*t(?:br|bn|bc))(\s+\([a-z][a-z_]*(?:pic)?\))?$', seg)
+    if m:
+        toks = [(m.group(1), TT.TBASE)]
+        if m.group(2):
+            toks.append((m.group(2), TT.FLAG))
+        return toks
+
+    # ── 单值段 ──
+
+    # 比特率 151 kb/s
+    if re.match(r'^[\d.]+\s*kb/s$', seg):
+        return [(seg, TT.BITRATE)]
+
+    # 帧率 25 fps / 29.97 fps
+    if re.match(r'^[\d.]+\s*fps$', seg):
+        return [(seg, TT.FPS)]
+
+    # 采样率 44100 Hz
+    if re.match(r'^\d+\s*Hz$', seg):
+        return [(seg, TT.SRATE)]
+
+    # 质量范围 q=2-31
+    if re.match(r'^q=\d+-?\d*$', seg):
+        return [(seg, TT.QUALITY)]
+
+    # 声道布局（仅音频流）
+    if seg.lower() in CHAN_LAYOUTS and stype == 'Audio':
+        return [(seg, TT.CHANS)]
+
+    # 采样格式（仅音频流）
+    if seg.lower() in SAMPLE_FMTS and stype == 'Audio':
+        return [(seg, TT.SFMT)]
+
+    # 编码器名（精确匹配，全词）
+    if seg.lower() in CODECS:
+        return [(seg, TT.CODEC)]
+
+    # 未知：当作纯文本
+    return [(seg, TT.TEXT)]
+
+
+def _tokenize_detail(detail, stype):
+    """把 Stream 行的详情部分拆成 token。"""
+    segs = _split_detail(detail)
+    toks = []
+    for i, seg in enumerate(segs):
+        if i > 0:
+            toks.append((', ', TT.PUNCT))
+        toks.extend(_classify_seg(seg, stype))
+    return toks
+
+
+# ─── 各行格式 tokenizer ──────────────────────────────────────────────────────
+
+def _tk_stream(line):
+    """Stream #0:0(und): Video: h264 (...), yuv420p, 1920x1080, ..."""
+    m = _RE_STREAM.match(line)
+    if not m:
+        return [(line, TT.TEXT)]
+    
+    indent, sid, lang, stype_raw, rest = m.groups()
+    stype = stype_raw  # Video, Audio, Subtitle, Data, Attachment
+    stype_tt = getattr(TT, stype.upper(), TT.TEXT)  # TT.VIDEO, TT.AUDIO, ...
+    
+    toks = []
+    if indent:
+        toks.append((indent, TT.TEXT))
+    toks.append(('Stream ' + sid, TT.STREAM_ID))
+    if lang:
+        toks.append(('(' + lang + ')', TT.LANG))
+    toks.append((': ', TT.PUNCT))
+    toks.append((stype, stype_tt))
+    toks.append((': ', TT.PUNCT))  # 流类型后的冒号（regex 中 :\s* 已消耗，这里补回）
+
+    if rest:
+        # 第一个词（到空格或逗号为止）通常是 codec 名
+        # rest 可能是 "h264 (...), ..." 或 "flac, 44100 Hz, ..." 或 "wrapped_avframe, ..."
+        # 注意：不能用 \S+，因为它会把 "flac," 整体匹配（含逗号），导致无法识别为 codec
+        fw = re.match(r'^([^\s,]+)([\s,]*)', rest)
+        if fw and fw.group(1).lower() in CODECS:
+            first, sep = fw.group(1), fw.group(2)
+            remainder = rest[fw.end():]
+            toks.append((first, TT.CODEC))  # 无前导空格（上面的 ': ' 已含空格）
+            if sep:
+                toks.append((sep, TT.PUNCT))
+            if remainder:
+                toks.extend(_tokenize_detail(remainder, stype))
+        else:
+            # 第一个词不是已知 codec，整个 rest 当 detail
+            toks.extend(_tokenize_detail(rest, stype))
+    
+    return toks
+
+
+def _tk_input(line):
+    """Input #0, mov,mp4,..., from '/path/file.mp4':"""
+    m = _RE_INPUT.match(line)
+    if not m:
+        return [(line, TT.TEXT)]
+    indent, dir_s, num, fmts, fname = m.groups()
+    tt = TT.INPUT_HDR if dir_s == 'Input' else TT.OUTPUT_HDR
+    return [
+        (indent or '', TT.TEXT),
+        (f'{dir_s} {num}', tt),
+        (', ', TT.PUNCT),
+        (fmts, TT.FMT_NAME),
+        (', from \'', TT.PUNCT),
+        (fname, TT.FILENAME),
+        ('\':', TT.PUNCT),
+    ]
+
+
+def _tk_dur(line):
+    """Duration: 00:00:01.00, start: 0.000000, bitrate: 151 kb/s"""
+    m = _RE_DUR.match(line)
+    if not m:
+        return [(line, TT.TEXT)]
+    indent, dur, start, br = m.groups()
+    return [
+        (indent, TT.TEXT),
+        ('Duration: ', TT.KEY_HI),
+        (dur, TT.DURATION),
+        (', start: ', TT.KEY),
+        (start, TT.TIME),
+        (', bitrate: ', TT.KEY),
+        (br, TT.BITRATE),
+    ]
+
+
+def _tk_kv(line):
+    """codec_name=h264（-show_format / -show_streams 模式）"""
+    m = _RE_KV.match(line)
+    if not m:
+        return [(line, TT.TEXT)]
+    key, val = m.groups()
+    kt = TT.KEY_HI if key in IMPORTANT_KEYS else TT.KEY
+    
+    if not val:
+        return [(key, kt), ('=', TT.PUNCT)]
+    
+    # codec
+    if key == 'codec_name' and val.lower() in CODECS:
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.CODEC)]
+    # pix_fmt
+    if key == 'pix_fmt' and val in PIXFMTS:
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.PIXFMT)]
+    # sample_fmt
+    if key == 'sample_fmt' and val.lower() in SAMPLE_FMTS:
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.SFMT)]
+    # hex
+    if re.match(r'^0x', val):
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.HEX)]
+    # 时间格式 00:00:01.00
+    if key in ('duration', 'start_time') and re.match(r'^\d+:\d+:\d+', val):
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.DURATION)]
+    # 纯数字
+    if val.isdigit():
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.NUM)]
+    # 带小数的数字
+    if re.match(r'^\d+\.\d+$', val):
+        return [(key, kt), ('=', TT.PUNCT), (val, TT.NUM)]
+    # 默认值
+    return [(key, kt), ('=', TT.PUNCT), (val, TT.VALUE)]
+
+
+def _tk_meta(line):
+    """    handler_name    : VideoHandler
+
+    保留 key 与冒号之间的原始空格（ffprobe 对齐输出），同时支持
+    多行 metadata 的续行（只有缩进 + : value，无 key）。
+    """
+    m = _RE_META.match(line)
+    if m:
+        indent, key, sep, val = m.groups()
+        toks = [(indent, TT.TEXT), (key, TT.MKEY), (sep, TT.PUNCT)]
+    else:
+        m = _RE_META_CONT.match(line)
+        if not m:
+            return [(line, TT.TEXT)]
+        indent, sep, val = m.groups()
+        toks = [(indent, TT.TEXT), (sep, TT.PUNCT)]
+
+    # 在值里高亮 codec 名（只在确切匹配时）
+    if val and _CODEC_RE.search(val):
+        last = 0
+        for cm in _CODEC_RE.finditer(val):
+            if cm.start() > last:
+                toks.append((val[last:cm.start()], TT.MVAL))
+            toks.append((cm.group(0), TT.CODEC))
+            last = cm.end()
+        if last < len(val):
+            toks.append((val[last:], TT.MVAL))
+    else:
+        toks.append((val, TT.MVAL))
+
+    return toks
+
+
+def _tk_tag(line):
+    """[STREAM], [FORMAT], [CHAPTER]"""
+    m = _RE_TAG.match(line)
+    if not m:
+        return [(line, TT.TEXT)]
+    name, rest = m.groups()
+    return [(f'[{name}]', TT.TAG), (rest if rest else '', TT.TEXT)]
+
+
+def _tk_progress(line):
+    """frame=  25 fps=25.0 q=-1.0 Lsize=N/A time=00:00:01.00 bitrate=N/A speed=137x
+
+    保留原始空格布局：ffmpeg 的进度行使用对齐的等宽字段（如
+    "frame= 6710 fps=0.0 q=-1.0 Lsize=   95606KiB"），空格位置有语义。
+    这里不 strip / 重排空格，只对 key= 和 value 分别着色。
+    """
+    # 用 finditer 而非 split，避免 Lsize 内部被 size 截断
+    # elapsed 仅出现在行尾，加入以便正确着色
+    key_pat = re.compile(r'(frame|Lsize|bitrate|speed|time|size|fps|q|elapsed)\s*=')
+    matches = list(key_pat.finditer(line))
+    if not matches:
+        return [(line, TT.TEXT)]
+
+    toks = []
+    last = 0
+    for i, m in enumerate(matches):
+        # key 前的文本（首段可能含前导空格）
+        if m.start() > last:
+            toks.append((line[last:m.start()], TT.TEXT))
+        # key= 原样保留（含 key 与 = 之间可能的空格）
+        toks.append((m.group(0), TT.PK))
+        # value = 从 = 后到下一个 key 之前，原样保留（不 strip）
+        val_start = m.end()
+        val_end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
+        val = line[val_start:val_end]
+        if val:
+            toks.append((val, TT.PV))
+        last = val_end
+    return toks
+
+
+def _tk_io_hdr(line):
+    """ffmpeg 模式下的 Input #0 / Output #0（不带文件名的简写形式）"""
+    m = re.match(r'^(\s*)(Input|Output)\s+(#\d+),\s*(.*)$', line)
+    if not m:
+        return [(line, TT.TEXT)]
+    indent, dir_s, num, rest = m.groups()
+    tt = TT.INPUT_HDR if dir_s == 'Input' else TT.OUTPUT_HDR
+    return [(indent, TT.TEXT), (f'{dir_s} {num}', tt), (', ', TT.PUNCT), (rest, TT.TEXT)]
+
+
+def _tk_muxing(line):
+    """[out#0/null @ 0x...] video:11KiB audio:88KiB ..."""
+    toks = []
+    # 高亮 key:value 对（video:11KiB 等）
+    for m in re.finditer(r'(\w+):([\d.]+\w*)', line):
+        start = m.start()
+        # 添加前面的普通文本
+        end_prev = toks and sum(len(t) for t, _ in toks) or 0
+        if start > end_prev:
+            toks.append((line[end_prev:start], TT.TEXT))
+        toks.append((m.group(1) + ':', TT.KEY))
+        toks.append((m.group(2), TT.NUM))
+    # 尾部文本
+    covered = sum(len(t) for t, _ in toks) if toks else 0
+    if covered < len(line):
+        toks.append((line[covered:], TT.TEXT))
+    return toks if toks else [(line, TT.TEXT)]
+
+
+# ─── 行路由：判断一行属于哪种格式，分发给对应 tokenizer ──────────────────────
+
+def tokenize(line):
+    """把一行文本拆成 [(text, token_type), ...] 列表。"""
+    # 只去除换行符，保留行尾空格（进度行的对齐空格有语义）
+    s = line.rstrip('\n\r')
+    if not s:
+        return [(line, TT.TEXT)]
+    
+    # 结构标签 [STREAM], [FORMAT]...
+    if s.startswith('[') and ']' in s and len(s) < 60:
+        return _tk_tag(s)
+    
+    # Stream 行
+    if re.match(r'^\s*Stream\s+#', s):
+        return _tk_stream(s)
+    
+    # Input/Output + filename
+    if re.match(r'^\s*(Input|Output)\s+#\d+,\s*.*from\s+\'', s):
+        return _tk_input(s)
+    
+    # Duration 行
+    if re.match(r'^\s*Duration:', s):
+        return _tk_dur(s)
+    
+    # ffmpeg 配置行（必须在 metadata 之前检查！）
+    if s.lstrip().startswith('configuration:'):
+        return _tk_config(s)
+
+    # 进度行（必须在 KV 之前！因为 'frame=...' 也匹配 KV 正则）
+    if _RE_PROG_K.search(s) and re.match(r'^\s*(frame|Lsize|size|fps|time|speed|q|bitrate)=', s.lstrip()):
+        return _tk_progress(s)
+
+    # KV 模式（-show_format / -show_streams）
+    if _RE_KV.match(s):
+        return _tk_kv(s)
+
+    # Metadata 行（缩进 + key: value）或续行（缩进 + : value，无 key）
+    if (re.match(r'^\s{2,}\S.*?:\s+\S', s) or re.match(r'^\s+:\s+\S', s)) and not re.match(r'^\s+Stream\s', s):
+        return _tk_meta(s)
+    
+    # Stream mapping
+    if s.strip() == 'Stream mapping:':
+        return [(s, TT.SECTION)]
+    
+    # Stream mapping 子行: Stream #0:0 -> #0:0 (h264 ...)
+    if re.match(r'^\s+Stream\s+#\d+:\d+\s+->\s+#\d+:\d+', s):
+        return _tk_stream_map_line(s)
+    
+    # Input/Output 简写行
+    if re.match(r'^\s*(Input|Output)\s+#\d+,', s):
+        return _tk_io_hdr(s)
+    
+    # Muxing 信息行
+    if re.search(r'\[out#\d+/', s) or re.search(r'\[in#\d+/', s):
+        return _tk_muxing(s)
+    
+    # Press [q] to stop
+    if 'Press [q]' in s or 'to stop' in s:
+        return [(s, TT.HINT)]
+    
+    # 错误
+    low = s.lower()
+    if any(k in low for k in ('error', 'invalid data', 'could not ', 'no such', 'not found')):
+        return [(s, TT.ERROR)]
+    
+    # 警告
+    if any(k in low for k in ('warning', 'deprecated')):
+        return [(s, TT.WARNING)]
+    
+    # 默认：纯文本
+    return [(s, TT.TEXT)]
+
+
+def _tk_config(line):
+    """configuration: --enable-libx264 --enable-libaom ...
+
+    注意：configuration 行中包含大量 --enable-lib* 选项，其中只有部分
+    对应已知 codec。若逐个高亮会造成视觉不一致（有的亮、有的不亮），
+    因此这里仅整体着色，不拆分高亮单个 codec 名，保持原始输出外观。
+    """
+    m = re.match(r'^(\s*configuration:\s*)', line)
+    if not m:
+        return [(line, TT.CONFIG)]
+    prefix = m.group(1)
+    rest = line[len(prefix):]
+    return [(prefix, TT.KEY_HI), (rest, TT.CONFIG)]
+
+
+def _tk_stream_map_line(line):
+    """Stream #0:0 -> #0:0 (h264 (native) -> libx264 (libx264))"""
+    toks = []
+    # 提取缩进
+    m = re.match(r'^(\s+)', line)
+    if m:
+        toks.append((m.group(1), TT.TEXT))
+    
+    # Stream #0:0 -> #0:0
+    for m in re.finditer(r'Stream\s+(#\d+:\d+)', line):
+        toks.append((f'Stream {m.group(1)}', TT.STREAM_ID))
+    
+    # -> 
+    toks.append((' -> ', TT.PUNCT))
+    
+    # 括号内内容
+    paren_start = line.index('(') if '(' in line else -1
+    if paren_start >= 0:
+        inner = line[paren_start:]
+        toks.append((inner, TT.DIM))
+    
+    # 简单实现：如果上面的分析不够精确，fallback 到整体着色
+    if not toks or sum(len(t) for t, _ in toks) < len(line.rstrip('\n\r')):
+        return [(line.rstrip('\n\r'), TT.TEXT)]
+    return toks
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Renderer：把 token 列表渲染成带 ANSI 颜色的字符串
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render(tokens):
+    """把 [(text, TT), ...] 渲染成带颜色的字符串。"""
+    parts = []
+    for text, tt in tokens:
+        codes = THEME.get(tt, ())
+        if codes and _ok():
+            parts.append(''.join(codes) + text + A.R)
+        else:
+            parts.append(text)
+    return ''.join(parts)
+
+
+def colorize(line):
+    """单行着色：tokenize → render。"""
+    return render(tokenize(line))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 模式检测 / 子进程 / 管道
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def detect_mode(args):
+    if '--pipe' in args or '-p' in args: return 'pipe'
+    if '--ffmpeg' in args: return 'ffmpeg'
+    if '--ffprobe' in args: return 'ffprobe'
+    
+    name = os.path.basename(sys.argv[0]).lower()
+    if 'ffprobe' in name: return 'ffprobe'
+    if 'ffmpeg' in name: return 'ffmpeg'
+    
+    probe_f = {'-show_format','-show_streams','-show_frames','-show_packets',
+               '-show_data','-print_format','-of','-show_entries','-select_streams'}
+    ffmpeg_f = {'-c:v','-c:a','-c:s','-codec:v','-codec:a','-map',
+                '-vf','-af','-filter:v','-filter:a','-preset','-crf',
+                '-b:v','-b:a','-acodec','-vcodec','-scodec',
+                '-movflags','-x264-params','-aspect'}
+    
+    hp = any(a in probe_f for a in args)
+    hf = any(any(a.startswith(f) for f in ffmpeg_f) for a in args)
+    if hp and not hf: return 'ffprobe'
+    if hf and not hp: return 'ffmpeg'
+    if '-i' in args: return 'ffmpeg'
+    return 'ffprobe'
+
+
+def _reader_thread(stream, q):
+    """后台线程：从 stream 中读取数据块放入队列，EOF 时放入 None。"""
+    try:
+        while True:
+            chunk = stream.read1(4096)
+            if not chunk:
+                break
+            q.put(chunk)
+    except (OSError, ValueError):
+        pass
+    q.put(None)  # EOF 标记
+
+
+def _colorize_stream(stream):
+    """从 stream 读取、着色并实时输出。
+
+    使用后台线程 + 队列 + 超时的方式，解决两个问题：
+    1. 交互提示（如 "File 'xxx' already exists. Overwrite? [y/N]"）没有
+       换行符，传统按行读取会阻塞导致提示无法显示。这里在短超时后把
+       未结束的部分行原样输出，让用户能看到提示并交互。
+    2. 进度行以 \\r 结尾，需要按 \\r / \\n 切分并着色，保留原始布局。
+    3. EOF 时若缓冲区还有内容（最后一行无换行），着色后输出。
+    """
+    q = queue.Queue()
+    t = threading.Thread(target=_reader_thread, args=(stream, q), daemon=True)
+    t.start()
+
+    buf = ''
+    while True:
+        try:
+            item = q.get(timeout=0.05)
+        except queue.Empty:
+            # 短暂无数据：若有未结束的部分行（可能是交互提示），
+            # 原样输出（不着色），让用户能看到并响应
+            if buf:
+                sys.stdout.write(buf)
+                sys.stdout.flush()
+                buf = ''
+            continue
+
+        if item is None:
+            # EOF：剩余缓冲区着色后输出
+            if buf:
+                sys.stdout.write(colorize(buf))
+                sys.stdout.flush()
+            return
+
+        buf += item.decode('utf-8', errors='replace')
+
+        # 处理已结束的行（以 \r 或 \n 结尾），着色后输出
+        while True:
+            nl = buf.find('\n')
+            cr = buf.find('\r')
+            if nl == -1 and cr == -1:
+                break
+            if nl == -1:
+                pos = cr
+            elif cr == -1:
+                pos = nl
+            else:
+                pos = min(nl, cr)
+            line = buf[:pos]
+            term = buf[pos:pos + 1]
+            buf = buf[pos + 1:]
+            sys.stdout.write(colorize(line) + term)
+            sys.stdout.flush()
+
+
+def pipe_mode():
+    _colorize_stream(sys.stdin.buffer)
+
+
+def run_wrapped(args, mode):
+    clean = [a for a in args if a not in ('--pipe','-p','--ffmpeg','--ffprobe')]
+    binary = 'ffprobe' if mode == 'ffprobe' else 'ffmpeg'
+    try:
+        subprocess.run([binary, '-version'], capture_output=True, check=True)
+    except FileNotFoundError:
+        print(_a(f"错误: 未找到 '{binary}'，请确保已安装。", A.LRED), file=sys.stderr)
+        sys.exit(127)
+    except subprocess.CalledProcessError:
+        pass
+
+    # stdin 继承自父进程，让 ffmpeg 的交互提示（如 Overwrite? [y/N]）
+    # 能直接读取用户的键盘输入
+    proc = subprocess.Popen([binary] + clean,
+                            stdin=sys.stdin,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            bufsize=0)
+
+    def fwd(sig, _):
+        try: proc.send_signal(sig)
+        except ProcessLookupError: pass
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, fwd)
+
+    try:
+        _colorize_stream(proc.stdout)
+    except KeyboardInterrupt:
+        proc.terminate()
+        try: proc.wait(timeout=3)
+        except subprocess.TimeoutExpired: proc.kill()
+        print('\n' + _a('已中断。', A.D), file=sys.stderr)
+    proc.wait()
+    sys.exit(proc.returncode)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 帮助 / 入口
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _help():
+    p = os.path.basename(sys.argv[0])
+    print(f"{_a('ffmpeg-color', A.B, A.LCYN)} {_a('v2 — 词法分析驱动的 ffmpeg/ffprobe 输出着色器', A.D)}\n"
+          f"{_a('用法:', A.B)}\n"
+          f"  {_a(p, A.LGRN)} {_a('[选项]', A.LCYN)} {_a('[ffmpeg/ffprobe 参数 ...]', A.LYEL)}\n\n"
+          f"{_a('模式:', A.B)}\n"
+          f"  {_a('--ffmpeg', A.LCYN)}   强制 ffmpeg 涂色模式\n"
+          f"  {_a('--ffprobe', A.LCYN)}  强制 ffprobe 涂色模式\n"
+          f"  {_a('--pipe', A.LCYN)} {_a('-p', A.LCYN)}  管道模式\n\n"
+          f"{_a('示例:', A.B)}\n"
+          f"  {_a(f'  {p} -i movie.mp4', A.LYEL)}\n"
+          f"  {_a(f'  {p} -i in.mp4 -c:v libx264 -crf 23 out.mp4', A.LYEL)}\n"
+          f"  {_a(f'  ffprobe -show_streams f.mp4 | {p} --pipe', A.LYEL)}\n\n"
+          f"{_a('颜色:', A.B)}  "
+          f"{_a('青', A.LCYN)}=视频  {_a('绿', A.LGRN)}=音频  {_a('黄', A.LYEL)}=字幕  "
+          f"{_a('品红', A.LMAG)}=数值  {_a('红', A.LRED)}=错误  {_a('蓝', A.LBLU)}=信息\n\n"
+          f"{_a('环境变量:', A.B)}  {_a('NO_COLOR=1', A.LCYN)} 禁用  {_a('FORCE_COLOR=1', A.LCYN)} 强制")
+
+
+def main():
+    _enable_vt()
+    args = sys.argv[1:]
+    if not args or '--help' in args or '-h' in args:
+        _help(); sys.exit(0)
+    if '--version' in args or '-V' in args:
+        print('ffmpeg-color v2.0.0'); sys.exit(0)
+    
+    mode = detect_mode(args)
+    if mode == 'pipe':
+        pipe_mode()
+    else:
+        run_wrapped(args, mode)
+
+
+if __name__ == '__main__':
+    main()

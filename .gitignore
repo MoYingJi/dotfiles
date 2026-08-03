@@ -1,2 +1,5 @@
 /.secret/**
 !/.secret/*.example.*
+
+/dot_config/sparkle/override/private.js
+/dot_config/VSCode/User/settings.json.d/private.json
