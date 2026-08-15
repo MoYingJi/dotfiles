@@ -30,6 +30,15 @@
         "https://www.schemastore.org/": true
     },
 
+    "yaml.disableSchemaDetection": [
+        "**/.github/workflows/*.yml",
+        "**/.github/workflows/*.yaml",
+        "**/.gitea/workflows/*.yml",
+        "**/.gitea/workflows/*.yaml",
+        "**/.forgejo/workflows/*.yml",
+        "**/.forgejo/workflows/*.yaml",
+    ],
+
     "terminal.integrated.defaultProfile.linux": "fish",
     // 让 AI 插件使用 bash 以获得更好的兼容性
     "terminal.integrated.automationProfile.linux": {

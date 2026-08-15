@@ -1,171 +1,180 @@
 # Chezmoi Ignore
 
+###### 辅助目录 ######
+
+.config/VSCode/User/settings.json.d/
+.config/opencode/opencode.json.d/
+
 ###### all ######
 
 {{- if not (lookPath "waylyrics") }}
-/.config/waylyrics
-/.local/share/waylyrics
+.config/waylyrics
+.local/share/waylyrics
 {{- end }}
 
 {{- if not (lookPath "fcitx5") }}
-/.config/fcitx5
-/.local/share/fcitx5
+.config/fcitx5
+.local/share/fcitx5
 {{- end }}
 
 {{- if not (and (lookPath "ffmpeg") (lookPath "ffprobe")) }}
-/.local/share/applications/ffprobe-output.desktop
-/.local/binScript/ff-interactive
+.local/share/applications/ffprobe-output.desktop
+.local/binScript/ff-interactive
 {{- end }}
 
 ###### / ######
 
 {{- if not (lookPath "bash") }}
-/.bashrc
+.bashrc
 {{- end }}
 
 {{- if not (lookPath "zsh") }}
-/.zshrc
+.zshrc
 {{- end }}
 
 ###### /.config ######
 
 {{- if not (lookPath "bilibili") }}
-/.config/bilibili
+.config/bilibili
 {{- end }}
 
 {{- if not (lookPath "fastfetch") }}
-/.config/fastfetch
+.config/fastfetch
 {{- end }}
 
 {{- if not (lookPath "fish") }}
-/.config/fish
+.config/fish
 {{- end }}
 
 {{- if not (lookPath "kitty") }}
-/.config/kitty
+.config/kitty
 {{- end }}
 
 {{- if not (lookPath "lsfg-vk-ui") }}
-/.config/lsfg-vk
+.config/lsfg-vk
 {{- end }}
 
 {{- if not (lookPath "mangohud") }}
-/.config/MangoHud
+.config/MangoHud
 {{- end }}
 
 {{- if not (lookPath "mpv") }}
-/.config/mpv
+.config/mpv
 {{- end }}
 
 {{- if not (lookPath "wechat-universal") }}
-/.config/wechat-universal
+.config/wechat-universal
 {{- end }}
 
 {{- if not (lookPath "fc-list") }}
-/.config/fontconfig
+.config/fontconfig
 {{- end }}
 
 {{- if not (lookPath "nvim") }}
-/.config/nvim
+.config/nvim
+{{- end }}
+
+{{- if not (lookPath "pipewire") }}
+.config/pipewire
 {{- end }}
 
 {{- if not (stat "/opt/sparkle") }}
-/.config/sparkle
+.config/sparkle
 {{- end }}
 
 {{- if not (lookPath "systemctl") }}
-/.config/systemd
+.config/systemd
 {{- end }}
 
 {{- if not (lookPath "code") }}
-/.config/code-flags.conf
-/.config/VSCode
-/.config/Code
-/.config/Code - Insiders
-/.config/Code - OSS
+.config/code-flags.conf
+.config/VSCode
+.config/Code
+.config/Code - Insiders
+.config/Code - OSS
 {{- end }}
 
 {{- if not (lookPath "wireplumber") }}
-/.config/wireplumber
+.config/wireplumber
 {{- end }}
 
 {{- if not (lookPath "gamemoderun") }}
-/.config/gamemode.ini
+.config/gamemode.ini
 {{- end }}
 
 {{- if not (lookPath "qq") }}
-/.config/qq-bwrap-flags.conf
-/.config/qq-electron-flags.conf
+.config/qq-bwrap-flags.conf
+.config/qq-electron-flags.conf
 {{- end }}
 
 ###### /.local/share/applications ######
 
 {{- if not (lookPath "pacman") }}
-/.local/share/applications/pacman-install.desktop
+.local/share/applications/pacman-install.desktop
 {{- end }}
 
 ###### KDE 图标 ######
 
 {{- if not (lookPath "plasmashell") }}
-/.local/share/kio
+.local/share/kio
 {{- end }}
 
 {{- if not (lookPath "localsend") }}
-/.local/share/kio/servicemenus/share-with-localsend.desktop
+.local/share/kio/servicemenus/share-with-localsend.desktop
 {{- end }}
 
 ###### 自定义脚本 ######
 
 {{- if not (lookPath "/usr/bin/kate") }}
-/.local/binCmd/kate-hosts
-/.local/binInject/kate
+.local/binCmd/kate-hosts
+.local/binInject/kate
 {{- end }}
 
 {{- if not (lookPath "git") }}
-/.local/binCmd/git-amend-date
-/.local/binScript/ghc
+.local/binCmd/git-amend-date
+.local/binScript/ghc
 {{- end }}
 
 {{- if not (lookPath "python3") }}
-/.local/binScript/cpu-control
+.local/binScript/cpu-control
 {{- end }}
 
 
 {{- if not (lookPath "firefox-developer-edition") }}
-/.local/binCmd/firefox
+.local/binCmd/firefox
 {{- end }}
 
 {{- if not (lookPath "fcitx5") }}
-/.local/binCmd/input-env
+.local/binCmd/input-env
 {{- end }}
 
 {{- if not (lookPath "plasmashell") }}
-/.local/binCmd/kde-restart
+.local/binCmd/kde-restart
 {{- end }}
 
 {{- if not (and (lookPath "archlinux-java") (lookPath "fzf")) }}
-/.local/binScript/chj
+.local/binScript/chj
 {{- end }}
 
 {{- if not (lookPath "code") }}
-/.local/binScript/codews
+.local/binScript/codews
 {{- end }}
 
 {{- if not (lookPath "curl") }}
-/.local/binScript/gcurl
+.local/binScript/gcurl
 {{- end }}
 
 {{- if not (lookPath "ffmpeg") }}
-/.local/binScript/mkv-merge
+.local/binScript/mkv-merge
 {{- end }}
 
 {{- if not (lookPath "yay") }}
-/.local/binScript/yc
+.local/binScript/yc
 {{- end }}
 
 ###### 服务 ######
 
 {{- if not (lookPath "kwalletd6") }}
-/.config/systemd/user/kwallet-backup.service
-/.local/binService/kwallet-backup
+.config/systemd/user/kwallet-backup.service
+.local/binService/kwallet-backup
 {{- end }}

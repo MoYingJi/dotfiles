@@ -1,0 +1,22 @@
+patch:
+    translator/dictionary: rime_ice.extended
+
+    # Ctrl 切换中英文
+    ascii_composer/switch_key:
+        Control_L: commit_code
+        Shift_L: noop
+
+    # 管你半角不半角 这就是我的常用预设了
+    punctuator/half_shape/+:
+        # 常用
+        "`": ["`", "·"]
+        "[": ["[", "「", "【", "〔", "［"]
+        "]": ["]", "」", "】", "〕", "］"]
+        "{": ["{", "『", "〖", "｛"]
+        "}": ["}", "』", "〗", "｝"]
+
+    key_binder/bindings/+:
+        - { when: composing, accept: Left, send: Up }
+        - { when: composing, accept: Right, send: Down }
+        - { when: paging, accept: Up, send: Page_Up }
+        - { when: has_menu, accept: Down, send: Page_Down }

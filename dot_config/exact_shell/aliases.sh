@@ -75,6 +75,7 @@ alias ys='yay -S'
 
 ## 目录
 alias tmp='cd /tmp'
+alias cdmktmp='cd $(mktemp -d)'
 alias down='cd $(xdg-user-dir DOWNLOAD)'
 alias pub='cd $(xdg-user-dir PUBLICSHARE)'
 alias pstow='cd $(xdg-user-dir PUBLICSHARE)/stow'

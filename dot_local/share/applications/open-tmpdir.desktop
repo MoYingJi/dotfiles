@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Open Temporary Directory
+Name[zh_CN]=打开临时目录
+Comment=Create and open a temporary directory
+Comment[zh_CN]=创建并打开一个临时目录
+Exec=sh -c 'xdg-open "$(mktemp -d)"'
+Icon=folder-open
+Terminal=false
+Categories=Utility;

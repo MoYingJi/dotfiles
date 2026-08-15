@@ -1,0 +1,19 @@
+{{- /* 动态构造配置目录：当前文件所在目录 / 当前文件名.d */ -}}
+{{- $templateDir := dir .chezmoi.sourceFile }}
+{{- $targetBase := base .chezmoi.targetFile }}
+{{- $subDir := print $targetBase ".d" }}
+{{- $confDir := joinPath .chezmoi.sourceDir $templateDir $subDir }}
+
+{{- /* 扫描所有 .json 和 .jsonc 文件（递归） */ -}}
+{{- $pattern := joinPath $confDir "**/*.json{,c}" }}
+{{- $files := glob $pattern }}
+
+{{- /* 合并 JSON */ -}}
+{{- $merged := dict }}
+{{- range $file := $files }}
+    {{- $content := include $file | fromJsonc }}
+    {{- $merged = mergeOverwrite $merged $content }}
+{{- end }}
+
+{{- /* 输出漂亮的 JSON */ -}}
+{{ $merged | toPrettyJson "    " }}

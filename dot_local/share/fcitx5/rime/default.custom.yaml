@@ -1,0 +1,9 @@
+patch:
+    # 这里的 rime_ice_suggestion 为雾凇方案的默认预设
+    __include: rime_ice_suggestion:/
+
+    # 一页有多少个词最好呢
+    menu/page_size: 5
+
+    # 我不要方案选单！
+    switcher/hotkeys: [noop]
