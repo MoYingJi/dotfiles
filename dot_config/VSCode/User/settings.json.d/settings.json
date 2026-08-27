@@ -69,6 +69,8 @@
 
     // 禁用更新检查
     "update.mode": "none",
+    // 禁用扩展自动更新
+    "extensions.autoUpdate": "off",
 
     "Lingma.methodQuickOperation": false,
     "Lingma.cloudModelAutoTriggerGenerateLength": "disable",

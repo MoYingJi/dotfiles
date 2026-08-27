@@ -16,6 +16,7 @@ const domainDirect = [
     "bgithub.xyz",
     "bikonoo.com",
     "bing.com",
+    "chaotic.cx",
     "codeberg.org",
     "d2learn.org",
     "firefox.com",
