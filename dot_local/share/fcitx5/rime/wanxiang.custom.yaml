@@ -1,0 +1,7 @@
+patch:
+    # translator/dictionary: wanxiang.extended
+
+    # Ctrl 切换中英文
+    ascii_composer/switch_key:
+        Control_L: commit_code
+        Shift_L: noop

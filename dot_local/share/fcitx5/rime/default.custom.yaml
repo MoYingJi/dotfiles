@@ -1,6 +1,9 @@
 patch:
     # 这里的 rime_ice_suggestion 为雾凇方案的默认预设
-    __include: rime_ice_suggestion:/
+    # __include: rime_ice_suggestion:/
+
+    # 这里的 wanxiang_suggestion 为万象方案的默认预设
+    __include: wanxiang_suggestion:/
 
     # 一页有多少个词最好呢
     menu/page_size: 5

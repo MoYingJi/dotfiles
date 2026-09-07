@@ -28,6 +28,7 @@ const domainDirect = [
     "mozilla.org",
     "naiveui.com",
     "natchecker.com",
+    "npmjs.org",
     "npmmirror.com",
     "office365.com",
     // "open.spotify.com",
@@ -41,6 +42,9 @@ const domainDirect = [
 
     // JetBrains Account
     "account.jetbrains.com",
+
+    // 一些需要直连的更杂七杂八的域名
+    "api-direct.27api.com",
 ]
 
 const domainProxy = [

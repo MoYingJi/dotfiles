@@ -1,0 +1,23 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use URI::Escape;   # 提供 uri_escape 函数
+
+# 读取输入
+my $input;
+if (@ARGV) {
+    # 如果有命令行参数，将它们用空格连接成一个字符串
+    $input = join(' ', @ARGV);
+} else {
+    # 否则从标准输入读取（保留换行符等所有内容）
+    local $/;       # 启用“吸模式”读取整个文件
+    $input = <STDIN>;
+}
+
+# 如果输入未定义（例如空输入），直接退出
+if (!defined $input) {
+    exit 0;
+}
+
+# 执行 URI 编码并输出
+print uri_escape($input);

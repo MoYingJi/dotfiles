@@ -1,6 +1,23 @@
 // 将键绑定放在此文件中以覆盖默认值
 [
     {
+        // 我补药退出！
+        "key": "ctrl+q",
+        "command": "-workbench.action.quit"
+    },
+
+    {
+        // 取消 F1 键的默认行为
+        "key": "f1",
+        "command": "-workbench.action.showCommands"
+    },
+    {
+        // 切换编辑器中的自动换行
+        "key": "f1",
+        "command": "editor.action.toggleWordWrap"
+    },
+
+    {
         // 在编辑器中触发内联建议
         "key": "alt+p",
         "command": "editor.action.inlineSuggest.trigger",

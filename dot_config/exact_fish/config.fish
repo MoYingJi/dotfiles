@@ -28,20 +28,3 @@ if status is-interactive
     zoxide init fish | source
     thefuck --alias | source
 end
-
-
-
-function mkcd -d "创建目录并进入"
-    mkdir -p $argv[1]
-    cd $argv[1]
-end
-
-function incognito -d "切换无痕模式"
-    if set -q fish_history
-        set -ge fish_history
-        echo "已退出无痕模式"
-    else
-        set -g fish_history ""
-        echo "已进入无痕模式"
-    end
-end

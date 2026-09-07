@@ -1,0 +1,9 @@
+name: wanxiang.extended
+version: "1.0"
+sort: by_weight
+use_preset_vocabulary: true
+
+import_tables:
+    - wanxiang
+    - moegirl
+    - zhwiki
