@@ -1,0 +1,419 @@
+### MangoHud 配置文件
+### 取消注释任何你想要启用的选项。默认选项保持未注释
+### 使用 some_parameter=0 来禁用一个参数（仅适用于开/关参数）
+### 以下所有内容都可以改用环境变量 MANGOHUD_CONFIG 来使用/覆盖
+
+################ 信息 #################
+## 在标准输出打印可用选项
+# help
+
+################ 性能 #################
+
+### 限制应用程序 FPS。逗号分隔的一个或多个 FPS 值（例如 0,30,60）。0 表示不限制（除非启用垂直同步）
+# fps_limit=0
+
+### early = 在呈现前等待，late = 在呈现后等待
+# fps_limit_method=
+
+### Vulkan 呈现模式。覆盖应用程序呈现模式。优先于 `vsync=`。
+# 呈现模式：
+#   immediate
+#   mailbox
+#   fifo
+#   fifo_relaxed
+#   shared_demand_refresh
+#   shared_continuous_refresh
+#   fifo_latest_ready
+# 呈现模式文档：
+#   https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPresentModeKHR.html
+# vulkan_present_mode=mailbox
+
+### 垂直同步 [0-3] 0 = 自适应；1 = 关闭；2 = 邮箱；3 = 开启
+# vsync=-1
+
+### OpenGL 垂直同步 [0-N] 0 = 关闭；>=1 = 等待 N 个 v-blank，N > 1 时充当 FPS 限制器（FPS = 显示器刷新率 / N）
+# gl_vsync=-2
+
+### Mip-map LoD 偏移。负值会增加纹理锐度（以及锯齿）
+## 正值会增加纹理模糊度（-16 到 16）
+# picmip=-17
+
+### 各向异性过滤级别。改善斜视角下纹理的清晰度（0 到 16）
+# af=-1
+
+### 强制双三次过滤
+# bicubic
+
+### 强制三线性过滤
+# trilinear
+
+### 禁用线性纹理过滤。使纹理看起来呈块状
+# retro
+
+################### 视觉 ###################
+
+### 传统布局
+# legacy_layout=0
+
+### 预定义预设
+# -1 = 默认
+#  0 = 不显示
+#  1 = 仅 FPS
+#  2 = 水平视图
+#  3 = 扩展
+#  4 = 高详细信息
+# preset=-1
+
+### 启用大多数可切换参数（目前不包括 `histogram`）
+# full
+
+### 仅显示 FPS。***不打算与其他显示参数一起使用***
+# fps_only
+
+### 显示自定义居中文本，可用于标题
+# custom_text_center=
+
+### 显示当前系统时间
+# time
+## 移除时间标签
+# time_no_label
+
+### 时间格式示例
+## %H:%M
+## [ %T %F ]
+## %X # 本地格式化时间，由于字形范围有限，缺失字符可能显示为 '?'（例如日语）
+# time_format="%T"
+
+### 显示 MangoHud 版本
+# version
+
+### 显示当前 GPU 信息
+## 注意：`gpu_mem_clock` 和 `gpu_mem_temp` 还需要启用 `vram`
+gpu_stats
+# gpu_temp
+# gpu_junction_temp
+# gpu_core_clock
+# gpu_mem_temp
+# gpu_mem_clock
+# gpu_power
+# gpu_power_limit
+# gpu_text=
+# gpu_load_change
+# gpu_load_value=60,90
+# gpu_load_color=39F900,FDFD09,B22222
+## AMD 上 GPU 风扇以 rpm 为单位，NVIDIA 上 FAN 以百分比为单位
+# gpu_fan
+## gpu_voltage 仅在 AMD GPU 上有效
+# gpu_voltage
+## 选择要显示的 GPU 列表
+# gpu_list=0,1
+# gpu_efficiency
+
+### 显示当前 CPU 信息
+cpu_stats
+# cpu_temp
+# cpu_power
+# cpu_text=
+# cpu_mhz
+# cpu_load_change
+# cpu_load_value=60,90
+# cpu_load_color=39F900,FDFD09,B22222
+# cpu_efficiency
+
+### 显示每个核心的当前 CPU 负载和频率
+# core_load
+# core_load_change
+# core_bars
+# core_type
+
+### 显示应用程序（而非系统）的 IO 读写
+# io_read
+# io_write
+
+### 显示系统 vram / ram / swap 空间使用情况
+# vram
+# ram
+# swap
+
+### 显示每个进程的内存使用情况
+## 如果启用，显示驻留内存和其他类型
+# procmem
+# procmem_shared
+# procmem_virt
+# proc_vram
+
+### 显示电池信息
+# battery
+# battery_icon
+# device_battery=gamepad,mouse
+# device_battery_icon
+# battery_watt
+# battery_time
+
+### 显示 FPS 和帧时间
+fps
+# fps_sampling_period=500
+# fps_color_change
+# fps_value=30,60
+# fps_color=B22222,FDFD09,39F900
+# fps_text=""
+frametime
+# frame_count
+## fps_metrics 接受十进制值列表或值 avg
+# fps_metrics=avg,0.01
+
+### 基于功耗、电流、温度或“其他”显示 GPU 降频状态
+## 仅在当前发生降频时显示
+throttling_status
+## 与 throttling_status 相同，但在帧时间图表上显示降频
+#throttling_status_graph
+
+### 显示杂项信息
+# engine_version
+# engine_short_names
+# gpu_name
+# vulkan_driver
+# wine
+# exec_name
+# winesync
+# present_mode
+
+### 显示已加载的 MangoHud 架构
+# arch
+
+### 显示帧时间折线图
+frame_timing
+# frame_timing_detailed
+# dynamic_frame_timing
+# histogram
+
+### 显示 GameMode / vkBasalt 运行状态
+# gamemode
+# vkbasalt
+
+### Gamescope 相关选项
+## 显示 FSR 状态（仅在 gamescope 中有效）
+# fsr
+## 隐藏 `fsr` 选项的锐度信息（仅在 gamescope 中可用）
+# hide_fsr_sharpness
+## 显示 gamescope 应用帧时间和延迟图表（显然仅在 gamescope 上）
+# debug
+## 显示 HDR 状态（仅在 gamescope 中有效）
+# hdr
+## 显示当前刷新率（仅在 gamescope 中有效）
+# refresh_rate
+
+
+### graphs 显示一个或多个你选择的图表
+## 用 "," 分隔，可用图表有
+## gpu_load,cpu_load,gpu_core_clock,gpu_mem_clock,vram,ram,cpu_temp,gpu_temp
+# graphs=
+
+### mangoapp 相关选项
+## 使 mangoapp 显示在 Steam UI 上方
+# mangoapp_steam
+
+### Steam Deck 选项
+## 显示 Steam Deck 风扇 rpm
+# fan
+
+### 显示当前 FPS 限制
+# show_fps_limit
+
+### 显示当前分辨率
+# resolution
+
+### 显示当前显示会话
+# display_server
+
+### 以华氏度显示温度
+# temp_fahrenheit
+
+## 显示每帧焦耳效率
+# flip_efficiency
+
+### 显示自定义文本
+# custom_text=
+### 在下一列显示 Bash 命令的输出
+# exec=
+
+### 显示媒体播放器元数据
+# media_player
+## 例如 spotify
+# media_player_name=
+## 格式化元数据，行由 ; 分隔（进行中）
+## 示例：{title};{artist};{album}
+## 示例：Track:;{title};By:;{artist};From:;{album}
+# media_player_format=title,artist,album
+
+### 网络接口吞吐量
+# network
+## Network 可以接受参数，但不是必需的。
+## 不带参数时显示所有接口
+## 参数设置将显示哪些接口
+# network=eth0,wlo1
+
+
+### 更改 HUD 字体大小
+# font_size=24
+# font_scale=1.0
+# font_size_text=24
+# font_scale_media_player=0.55
+# no_small_font
+
+### 更改默认字体（将位置设置为 TTF/OTF 文件）
+## 为整个 HUD 设置字体
+# font_file=
+
+## 仅为文本（如媒体播放器元数据）设置字体
+# font_file_text=
+
+## 设置字体字形范围。默认仅拉丁字符。别忘了将 font_file/font_file_text 设置为支持这些字符的字体
+## 由于内存使用和硬件限制，可能不要一次性全部启用
+## 如果遇到崩溃或文本仅显示方块，请减少字形范围或减小字体大小
+# font_glyph_ranges=korean,chinese,chinese_simplified,japanese,cyrillic,thai,vietnamese,latin_ext_a,latin_ext_b
+
+### 文本描边
+text_outline
+# text_outline_color = 000000
+# text_outline_thickness = 1.5
+
+### 更改 HUD 位置
+# position=top-left
+
+### 更改圆角
+# round_corners=0
+
+### 移除 MangoHud 周围的边距
+# hud_no_margin
+
+### 显示 MangoHud 的紧凑版本
+# hud_compact
+
+### 以水平位置显示 MangoHud
+# horizontal
+# horizontal_stretch
+
+### 默认禁用/隐藏 HUD
+# no_display
+
+### 显示 FEX-Emu 统计信息
+## 仅对在模拟下运行应用程序的 Arm64 设备有用
+# fex_stats
+
+### HUD 位置偏移
+# offset_x=0
+# offset_y=0
+
+### HUD 尺寸
+# width=0
+# height=140
+# table_columns=3
+# cellpadding_y=-0.085
+
+### HUD 透明度 / alpha
+# background_alpha=0.5
+# alpha=1.0
+
+### FCAT 叠加层
+### 启用 FCAT 叠加层以对最终图像流进行帧时间分析。
+### 启用叠加层
+# fcat
+### 设置 FCAT 叠加层的宽度。
+### 24 是 AMD GPU 上的性能优化，不应对 nVidia GPU 产生不利影响。
+### Nvidia 建议至少 20 像素。
+# fcat_overlay_width=24
+### 设置屏幕边缘，这对不从顶部边缘更新到底部的特殊显示器可能有用。从 0（左侧）到 3（顶部边缘），逆时针方向。
+# fcat_screen_edge=0
+
+### 颜色自定义
+# text_color=FFFFFF
+# gpu_color=2E9762
+# cpu_color=2E97CB
+# vram_color=AD64C1
+# ram_color=C26693
+# engine_color=EB5B5B
+# io_color=A491D3
+# frametime_color=00FF00
+# background_color=020202
+# media_player_color=FFFFFF
+# wine_color=EB5B5B
+# battery_color=FF9078
+# network_color=E07B85
+# horizontal_separator_color=AD64C1
+
+### 使用 PCI 总线 ID 指定 GPU
+### 设置为 'domain:bus:slot.function'
+### 示例：
+###     $ lspci | grep A770
+###     03:00.0 VGA compatible controller: Intel Corporation DG2 [Arc A770] (rev 08)
+# pci_dev=0000:03:00.0
+
+### 黑名单
+# blacklist=
+
+### Socket 控制
+### 启用并设置 socket 名称，'%p' 会替换为进程 ID
+## 示例：mangohud
+## 示例：mangohud-%p
+# control = -1
+
+### ftrace tracepoint 显示
+## 启用显示从 ftrace 收集的 tracepoint 信息。MangoHud 将从 ftrace 管道解析出必要数据，ftrace 本身仍需手动配置
+## （启用所需事件、应用过滤等）。运行 MangoHud 的用户需要有权访问默认挂载的 tracefs（预期位于
+## /sys/kernel/tracing/）。
+##
+## 解析 ftrace 输出时，目前仅期望事件字段使用 `key=value` 格式。这是事件中最常见的格式，但并非标准化。
+##
+## 可用三种显示类型：
+## - `histogram/drm_vblank_event`，事件发生直方图
+## - `linegraph/devfreq_monitor/freq`，事件字段数值的折线图
+## - `label/devfreq_frequency/dev_name`，事件字段值的文本呈现
+##
+## 通过 `ftrace` 选项设置显示。可以指定多个显示。
+# ftrace=histogram/drm_vblank_event+linegraph/devfreq_monitor/freq
+
+################ 变通方法 #################
+### 以 "gl_*" 开头的选项用于 OpenGL
+### 指定用于获取显示尺寸的方式。选项为 "viewport"、"scissorbox" 或禁用。默认使用 glXQueryDrawable
+# gl_size_query=viewport
+
+### 在绘制 MangoHud 之前（重新）绑定给定帧缓冲。有助于《十字军之王 III》
+# gl_bind_framebuffer=0
+
+### 如果使用 GL_UPPER_LEFT，不要交换原点。有助于 Ryujinx
+# gl_dont_flip=1
+
+################ 交互 #################
+
+### 更改 HUD 和日志记录的切换键位
+# toggle_hud=Shift_R+F12
+# toggle_hud_position=Shift_R+F11
+# toggle_preset=Shift_R+F10
+# toggle_fps_limit=Shift_L+F1
+# toggle_logging=Shift_L+F2
+# reload_cfg=Shift_L+F4
+# upload_log=Shift_L+F3
+# reset_fps_metrics=Shift_R+F9
+
+#################### 日志 #####################
+### X 秒后自动开始日志记录
+# autostart_log=
+### 设置日志记录运行的秒数
+# log_duration=
+### 更改默认日志间隔，默认值为 0
+# log_interval=0
+### 设置输出文件的位置（日志记录所需）
+# output_folder=/home/<USERNAME>/mangologs
+### 允许直接将日志上传到 FlightlessMango.com
+## 设置为 1 以启用
+# permit_upload=0
+### 定义基准测试结果中显示的百分位数列表，以 '+' 分隔
+### 使用 "AVG" 获取平均值。默认百分位数为 97+AVG+1+0.1
+## 示例：['97', 'AVG', '1', '0.1']
+# benchmark_percentiles=97,AVG
+## 向日志添加更多标头和信息，例如版本信息。此格式尚不支持 flightlessmango.com
+# log_versioning
+## 启用自动将日志上传到 flightlessmango.com
+# upload_logs
+# output_file=""

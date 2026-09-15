@@ -45,6 +45,9 @@
         "path": "/usr/bin/bash"
     },
 
+    // 我不要 GitHub Copilot 广告！
+    "terminal.integrated.initialHint": false,
+
     "workbench.tree.indent": 20,
     "workbench.list.smoothScrolling": true,
 

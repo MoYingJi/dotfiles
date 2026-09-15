@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+
+systemd-run --user --scope --collect \
+    --unit="app-$(systemd-escape -- com.obsproject.Studio)-$$" \
+    --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
+    --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+    --setenv=DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+    --setenv=XDG_CURRENT_DESKTOP="$XDG_CURRENT_DESKTOP" \
+    --setenv=XDG_SESSION_TYPE="$XDG_SESSION_TYPE" \
+    --setenv=QT_QPA_PLATFORM=xcb \
+    -- obs "$@"
+
+# QT_QPA_PLATFORM=xcb kstart --application com.obsproject.Studio

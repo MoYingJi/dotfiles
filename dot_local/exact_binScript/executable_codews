@@ -4,6 +4,8 @@
 # 依赖:
 #   fzf
 #   code
+#   notify-send (用于发送桌面通知)
+#   xdg-terminal-exec (用于在终端中执行脚本)
 # 环境:
 #   $VSCODE_OPEN := "code"
 #   $WORKSPACES  := "$(xdg-user-dir DOCUMENTS)/CodeWorkspace"
@@ -13,7 +15,12 @@
 # 根据文件名 调用 code 打开指定工作区
 
 [ -z "$WORKSPACES" ] && WORKSPACES="$(xdg-user-dir DOCUMENTS)/CodeWorkspace"
-[ -z "$VSCODE_OPEN" ] && VSCODE_OPEN="code"
+
+if [ -n "$VSCODE_OPEN" ]; then
+    read -ra VSCODE_OPEN <<< "$VSCODE_OPEN"
+else
+    VSCODE_OPEN=("code")
+fi
 
 [ -n "$1" ] && FZF_ARGS+=("--query" "$1")
 
@@ -21,23 +28,44 @@
 [[ "$1" != *.code-workspace ]] && NAME="$1.code-workspace" || NAME="$1"
 WORKSPACE_PATH="$WORKSPACES/$NAME"
 
-if [ ! -f "$WORKSPACE_PATH" ] && [ -t 1 ] && [ -t 0 ]; then
-    NAME="$(ls "$WORKSPACES" | sed 's/\.code-workspace$//' | fzf "${FZF_ARGS[@]}")"
-    WORKSPACE_PATH="$WORKSPACES/$NAME.code-workspace"
+if [ ! -f "$WORKSPACE_PATH" ]; then
+    if [ -t 1 ] && [ -t 0 ]; then
+        NAME="$(ls "$WORKSPACES" | sed 's/\.code-workspace$//' | fzf "${FZF_ARGS[@]}")"
+        WORKSPACE_PATH="$WORKSPACES/$NAME.code-workspace"
+    elif [ "$CODEWS_IN_TERMINAL" != 1 ]; then
+        self="$(cd -- "$(dirname -- "$0")" && pwd)/$(basename -- "$0")"
+        printf -v cmd '%q ' "$self" "$@"
+        if command -v xdg-terminal-exec >/dev/null 2>&1; then
+            exec xdg-terminal-exec -- bash -c "export CODEWS_IN_TERMINAL=1; $cmd;"
+            exit 1
+        fi
+    fi
 fi
 
 # 验证工作区文件是否存在
 [ -f "$WORKSPACE_PATH" ] || {
-    notify-send \
-        --icon=error \
-        --app-icon=com.visualstudio.code.oss \
-        --app-name="Code Workspace" \
-        "未找到工作区" "$NAME"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send \
+            --icon=error \
+            --app-icon=com.visualstudio.code.oss \
+            --app-name="Code Workspace" \
+            "未找到工作区" "$NAME"
+    fi
     exit 1
 }
+
+if command -v systemd-run >/dev/null 2>&1; then
+    VSCODE_OPEN=(
+        "systemd-run" "--user"
+        "--scope"
+        "--unit=app-codews-code-$$"
+        "--collect"
+        "${VSCODE_OPEN[@]}"
+    )
+fi
 
 # 处理符号链接
 WORKSPACE_PATH="$(realpath "$WORKSPACE_PATH")"
 
 # 调用 code 打开指定工作区
-$VSCODE_OPEN "$WORKSPACE_PATH"
+"${VSCODE_OPEN[@]}" "$WORKSPACE_PATH"

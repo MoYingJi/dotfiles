@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""ttmlfmt —— TTML 美化 / 压缩。
+
+用法:
+    ttmlfmt pretty   [-I STR | -t | -s N] [-i[SUFFIX]] [-|file]
+    ttmlfmt format   [-I STR | -t | -s N] [-i[SUFFIX]] [-|file]
+    ttmlfmt compress [-i[SUFFIX]] [-|file]
+
+示例:
+    ttmlfmt pretty   input.ttml  > output.ttml
+    ttmlfmt pretty   -I'  ' input.ttml       # 2 空格缩进
+    ttmlfmt pretty   -t input.ttml           # Tab 缩进
+    ttmlfmt pretty   -s 2 input.ttml         # 2 空格缩进
+    ttmlfmt pretty   --indent=$'\t' input.ttml
+    ttmlfmt pretty   -t -i.bak input.ttml    # Tab + 原地 + 备份
+    ttmlfmt pretty   -i input.ttml           # 原地覆盖，不备份
+    ttmlfmt pretty   -i.bak input.ttml       # 原地覆盖，备份为 input.ttml.bak
+    ttmlfmt pretty   --in-place=.bak input.ttml
+
+    ttmlfmt format   input.ttml              # 规范格式（span 序列保持一行）
+    ttmlfmt format   -t input.ttml           # Tab 缩进的规范格式
+    ttmlfmt format   -s 2 -i.bak input.ttml  # 2 空格 + 原地 + 备份
+
+    cat input.ttml | ttmlfmt compress -      # 从 stdin 读，输出 stdout
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import sys
+from pathlib import Path
+from xml.dom import Node, minidom
+from xml.sax.saxutils import escape as _esc, quoteattr
+
+sys.path.insert(0, str(Path.home() / ".local/lib/python"))
+from zh_argparse import install_zh_argparse  # type: ignore
+
+# ---------- 字符串级转换（对应 TS 里的三个 helper） ----------
+
+_WS_BETWEEN_TAGS = re.compile(r">\s+<")
+_SELF_CLOSING_SPAN = re.compile(r"<span([^>]*?)/>")
+
+
+def compress_xml(xml_str: str) -> str:
+    return _WS_BETWEEN_TAGS.sub("><", xml_str).strip()
+
+
+def space_formattable_ttml(content: str) -> str:
+    content = _SELF_CLOSING_SPAN.sub(r"<span\1></span>", content)
+    return content.replace("</span> <span", " </span><span")
+
+
+def space_specified_ttml(content: str) -> str:
+    return content.replace(" </span><span", "</span> <span")
+
+
+# ---------- 空白敏感格式化器（对应 formatXml） ----------
+
+def format_xml(
+    xml_str: str,
+    indent: str = "  ",
+    ws_sensitive=(),
+    inline_elements=(),
+    newline: bool = True,
+) -> str:
+    """把 XML 格式化成可读的缩进文本。
+
+    :param indent: 缩进字符串
+    :param ws_sensitive: 内部空白保留不 trim 的元素（如 "span"）
+    :param inline_elements: 若某元素的所有元素子节点都落在这个集合里，
+        则整个元素的子节点保持在一行（保留 span 之间的空格）。
+    """
+    ws_sensitive = set(ws_sensitive)
+    inline_elements = set(inline_elements)
+    doc = minidom.parseString(xml_str)
+
+    def line_sep(level: int) -> str:
+        return ("\n" + indent * level) if newline else ""
+
+    def serialize(node, level: int, preserve: bool):
+        if node.nodeType == Node.TEXT_NODE:
+            text = node.data or ""
+            if preserve:
+                return _esc(text)
+            stripped = text.strip()
+            return _esc(stripped) if stripped else None
+
+        if node.nodeType == Node.ELEMENT_NODE:
+            tag = node.tagName
+            attrs = "".join(
+                f" {node.attributes.item(i).name}={quoteattr(node.attributes.item(i).value)}"
+                for i in range(node.attributes.length)
+            )
+            cur_preserve = preserve or tag in ws_sensitive
+            children = list(node.childNodes)
+            has_elem_child = any(c.nodeType == Node.ELEMENT_NODE for c in children)
+
+            # 叶子元素：直接 <tag>text</tag>
+            if not has_elem_child:
+                text = "".join(
+                    c.data for c in children
+                    if c.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE)
+                )
+                if not cur_preserve:
+                    text = text.strip()
+                return f"<{tag}{attrs}>{_esc(text)}</{tag}>"
+
+            # 所有元素子节点都是 inline 元素 → 整体保持一行
+            elem_children = [c for c in children if c.nodeType == Node.ELEMENT_NODE]
+            if inline_elements and all(
+                c.tagName in inline_elements for c in elem_children
+            ):
+                parts: list[str] = []
+                for child in children:
+                    if child.nodeType == Node.TEXT_NODE:
+                        # span 之间的纯空白折叠成单个空格；span 内部不受影响
+                        parts.append(re.sub(r"\s+", " ", child.data or ""))
+                    elif child.nodeType == Node.ELEMENT_NODE:
+                        parts.append(serialize(child, level + 1, cur_preserve) or "")
+                    elif child.nodeType == Node.COMMENT_NODE:
+                        parts.append(f"<!--{child.data.replace('--', '- -')}-->")
+                inner = "".join(parts).strip()
+                return f"<{tag}{attrs}>{inner}</{tag}>"
+
+            # 一般多行处理
+            child_indent = line_sep(level + 1)
+            parts = [f"<{tag}{attrs}>"]
+            for child in children:
+                sub = serialize(child, level + 1, cur_preserve)
+                if sub is not None:
+                    parts.append(child_indent)
+                    parts.append(sub)
+            parts.append(line_sep(level))
+            parts.append(f"</{tag}>")
+            return "".join(parts)
+
+        if node.nodeType == Node.COMMENT_NODE:
+            # 注释里不允许出现 "--"，简单地用空格断开（或直接丢弃）
+            return f"<!--{node.data.replace('--', '- -')}-->"
+        if node.nodeType == Node.PROCESSING_INSTRUCTION_NODE:
+            return f"<?{node.target} {node.data}?>"
+        return None
+
+    root = doc.documentElement
+    return serialize(root, 0, root.tagName in ws_sensitive) or ""
+
+
+# ---------- CLI ----------
+
+def _normalize_inplace(argv: list[str]) -> list[str]:
+    """把 sed 风格的 -i[SUFFIX] 归一化成 --in-place[=SUFFIX]。
+
+    需要这样做的原因:
+      * argparse 对短选项的粘连参数处理不够可靠，尤其当 -i 是可选参数时；
+      * 必须避免 `-i file.ttml` 被错误解析成 `-i` 的值 = `file.ttml`。
+    统一归一到 `--in-place=`（显式空后缀）后，`-i` 就永远不会吞掉位置参数。
+    """
+    out: list[str] = []
+    seen_ddash = False
+    for a in argv:
+        if seen_ddash:
+            out.append(a)
+            continue
+        if a == "--":
+            seen_ddash = True
+            out.append(a)
+        elif a in ("-i", "--in-place"):
+            out.append("--in-place=")          # 裸 -i → 空后缀
+        elif a.startswith("-i") and not a.startswith("--") and len(a) > 2:
+            out.append("--in-place=" + a[2:])  # -i.bak → --in-place=.bak
+        else:
+            out.append(a)
+    return out
+
+
+def _read(path: str) -> str:
+    if path == "-":
+        return sys.stdin.read()
+    with open(path, "r", encoding="utf-8") as fh:
+        return fh.read()
+
+
+def main(argv=None) -> int:
+    install_zh_argparse()
+
+    raw = list(sys.argv[1:] if argv is None else argv)
+    raw = _normalize_inplace(raw)
+
+    parser = argparse.ArgumentParser(
+        prog="ttmlfmt", description="TTML 美化 / 压缩。"
+    )
+
+    sub = parser.add_subparsers(dest="cmd", required=True, metavar="命令")
+
+    for name, help_text in (
+        ("pretty",   "美观输出 TTML [不规范] (对 span 间距做编辑器技巧，便于 round-trip)"),
+        ("format",   "格式化 TTML   [规范]   (直接把 span 序列保持在一行，规范输出)"),
+        ("compress", "压缩 TTML     [不规范] (删除标签间空白；仅适用于 pretty 的逆操作)"),
+    ):
+        sp = sub.add_parser(name, help=help_text)
+        sp.add_argument(
+            "-i", "--in-place",
+            dest="in_place", default=None, metavar="SUFFIX",
+            help="直接修改文件（如果指定扩展名则备份文件）",
+        )
+        sp.add_argument(
+            "file", nargs="?", default="-",
+            help="输入文件；`-` 或省略表示从 stdin 读取",
+            metavar="文件"
+        )
+        if name == "pretty":
+            g = sp.add_mutually_exclusive_group()
+            g.add_argument(
+                "-I", "--indent",
+                default=None, metavar="STR",
+                help="缩进字符串（默认 4 个空格），例如 -I'  ' 或 --indent=$'\\t'",
+            )
+            g.add_argument(
+                "-t", "--tab",
+                action="store_true",
+                help="使用 Tab 缩进（等价于 --indent=$'\\t'）",
+            )
+            g.add_argument(
+                "-s", "--space",
+                type=int, default=None, metavar="N",
+                help="使用 N 个空格缩进（等价于 --indent=空格×N）",
+            )
+
+    args = parser.parse_args(raw)
+    data = _read(args.file)
+
+    if args.cmd == "pretty":
+        indent = "    "  # 默认
+        if args.indent is not None:
+            indent = args.indent
+        elif args.tab:
+            indent = "\t"
+        elif args.space is not None:
+            if args.space < 0:
+                parser.error("--space 必须 >= 0")
+            indent = " " * args.space
+
+        # 编辑器技巧：把 span 之间的空格挪进 span，compress 时可无损还原
+        out = format_xml(space_formattable_ttml(data), indent, ["span"])
+
+    elif args.cmd == "format":
+        out = space_specified_ttml(compress_xml(space_formattable_ttml(data)))
+    elif args.cmd == "compress":
+        out = space_specified_ttml(compress_xml(data))
+
+    if args.in_place is not None:
+        if args.file == "-":
+            parser.error("--in-place 不能与 stdin 一起使用")
+        path = args.file
+        if args.in_place:
+            # 类似 sed: 先把原文件改名成备份，再在原路径写新内容
+            os.replace(path, path + args.in_place)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(out)
+    else:
+        sys.stdout.write(out)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -137,11 +137,16 @@
 
 {{- if not (lookPath "python3") }}
 .local/binScript/cpu-control
+.local/binScript/ttmlfmt
+{{- end }}
+
+{{- if not (lookPath "perl") }}
+.local/binScript/uri-encode
 {{- end }}
 
 
-{{- if not (lookPath "firefox-developer-edition") }}
-.local/binCmd/firefox
+{{- if not (lookPath "obs") }}
+.local/binCmd/obs-x11
 {{- end }}
 
 {{- if not (lookPath "fcitx5") }}
@@ -150,6 +155,10 @@
 
 {{- if not (lookPath "plasmashell") }}
 .local/binCmd/kde-restart
+{{- end }}
+
+{{- if not (lookPath "firefox-developer-edition") }}
+.local/binInject/firefox
 {{- end }}
 
 {{- if not (and (lookPath "archlinux-java") (lookPath "fzf")) }}
