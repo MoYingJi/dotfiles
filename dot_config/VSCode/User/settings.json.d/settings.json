@@ -30,6 +30,18 @@
         "https://www.schemastore.org/": true
     },
 
+    "json.schemas": [
+        // VSCode & Chezmoi 配置文件 Scheme
+        {
+            "fileMatch": ["User/settings.json.d/*.{json,jsonc}"],
+            "url": "vscode://schemas/settings/user",
+        },
+        {
+            "fileMatch": ["User/keybindings.json.d/*.{json,jsonc}"],
+            "url": "vscode://schemas/keybindings",
+        },
+    ],
+
     "yaml.disableSchemaDetection": [
         "**/.github/workflows/*.yml",
         "**/.github/workflows/*.yaml",
@@ -39,11 +51,11 @@
         "**/.forgejo/workflows/*.yaml",
     ],
 
+    // 我是 fish 厨
     "terminal.integrated.defaultProfile.linux": "fish",
-    // 让 AI 插件使用 bash 以获得更好的兼容性
-    "terminal.integrated.automationProfile.linux": {
-        "path": "/usr/bin/bash"
-    },
+    // 让 agent 使用 bash 以获得更好的兼容性
+    "terminal.integrated.automationProfile.linux": { "path": "/usr/bin/bash" },
+    "chat.tools.terminal.terminalProfile.linux": { "path": "/usr/bin/bash" },
 
     // 我不要 GitHub Copilot 广告！
     "terminal.integrated.initialHint": false,

@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+
+if [ -z "$PRETTIER" ]; then
+
+    if command -v prettier >/dev/null 2>&1; then
+        PRETTIER=("prettier")
+    elif command -v pnpm >/dev/null 2>&1; then
+        PRETTIER=("pnpm" "exec" "prettier")
+    else
+        echo "Error: prettier is not installed." >&2
+        exit 1
+    fi
+fi
+
+"${PRETTIER[@]}" \
+    --ignore-path .prettierignore \
+    --ignore-path .gitignore \
+    --ignore-path .prettierignore.local \
+    --ignore-path "$PWD/.git/info/exclude" \
+    "$@"
