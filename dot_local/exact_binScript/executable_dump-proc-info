@@ -1,0 +1,79 @@
+#!/bin/bash
+# 保存所有匹配进程的 cmdline 和 environ 到单个文件（或输出到 stdout）
+
+PROCESS_CMDLINE="$1"
+OUTPUT_FILE="$2"
+
+usage() {
+    echo "用法: $0 <pgrep匹配模式> [输出文件]"
+    echo "  输出文件留空或为 '-' 时，输出到 stdout"
+    echo "示例: $0 'Wuthering Waves Game' /tmp/proc_info.txt"
+    echo "      $0 'Wuthering Waves Game' -"
+    echo "      $0 'Wuthering Waves Game'"
+    exit 1
+}
+
+[ -z "$PROCESS_CMDLINE" ] && usage
+
+# 判断是否输出到 stdout
+TO_STDOUT=0
+if [ -z "$OUTPUT_FILE" ] || [ "$OUTPUT_FILE" = "-" ]; then
+    TO_STDOUT=1
+fi
+
+if [ "$TO_STDOUT" -eq 1 ]; then
+    # 输出到 stdout
+    OUT() {
+        cat
+    }
+else
+    # 清空或创建输出文件
+    true > "$OUTPUT_FILE"
+    OUT() {
+        cat >> "$OUTPUT_FILE"
+    }
+fi
+
+# 获取匹配的 PID 列表（以空格分隔）
+PIDS="$(pgrep -f "$PROCESS_CMDLINE")"
+
+if [ -z "$PIDS" ]; then
+    echo "未找到匹配 '$PROCESS_CMDLINE' 的进程" >&2
+    exit 0
+fi
+
+for pid in $PIDS; do
+    # 排除自身脚本进程及其父进程（如调用它的 shell）
+    if [ "$pid" = "$$" ] || [ "$pid" = "$PPID" ]; then
+        continue
+    fi
+
+    if [ ! -d "/proc/$pid" ]; then
+        if [ "$TO_STDOUT" -eq 1 ]; then
+            echo "PID $pid 已不存在，跳过" >&2
+        else
+            echo "PID $pid 已不存在，跳过" | tee -a "$OUTPUT_FILE"
+        fi
+        continue
+    fi
+
+    {
+        echo "========== PID $pid =========="
+
+        echo "--- cmdline ---"
+        # cmdline 用 '\0' 分隔，转换为换行便于阅读
+        tr '\0' '\n' < "/proc/$pid/cmdline"
+
+        echo "--- environ ---"
+        # environ 同样以 '\0' 分隔
+        tr '\0' '\n' < "/proc/$pid/environ"
+
+        # 空行分隔不同进程
+        echo ""
+
+    } | OUT
+done
+
+if [ "$TO_STDOUT" -eq 0 ]; then
+    echo "信息已保存到 $OUTPUT_FILE"
+fi

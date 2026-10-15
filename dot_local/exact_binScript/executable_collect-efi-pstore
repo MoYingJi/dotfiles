@@ -1,0 +1,493 @@
+#!/usr/bin/env python3
+"""归档 pstore 原始记录，并为每条事件生成可读日志。"""
+
+import argparse
+import fnmatch
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+EVENT_HEADER = re.compile(rb"(Panic|Oops)#([0-9]+) Part([0-9]+)")
+
+
+def hash_file(path: Path) -> tuple[str, int]:
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as input_file:
+            while chunk := input_file.read(1024 * 1024):
+                digest.update(chunk)
+                size += len(chunk)
+        return digest.hexdigest(), size
+
+
+def sudo_command(arguments: list[str]) -> subprocess.CompletedProcess:
+        if os.geteuid() == 0:
+            command = arguments
+        else:
+            sudo = shutil.which("sudo")
+            if sudo is None:
+                raise PermissionError("访问 pstore 需要权限，但系统中找不到 sudo")
+            command = [sudo, *arguments]
+        result = subprocess.run(command, capture_output=True, text=False)
+        if result.returncode:
+            detail = result.stderr.decode("utf-8", errors="replace").strip()
+            raise OSError(detail or f"命令执行失败：{arguments[0]}")
+        return result
+
+
+def list_source_files(source: Path, pattern: str) -> list[Path]:
+        try:
+            entries = []
+            for path in source.iterdir():
+                if not fnmatch.fnmatchcase(path.name, pattern):
+                    continue
+                if stat.S_ISREG(path.stat().st_mode):
+                    entries.append(path)
+            return sorted(entries, key=lambda path: path.name)
+        except PermissionError:
+            result = sudo_command(
+                [
+                    "find",
+                    str(source),
+                    "-mindepth",
+                    "1",
+                    "-maxdepth",
+                    "1",
+                    "-type",
+                    "f",
+                    "-printf",
+                    "%f\\0",
+                ]
+            )
+            return sorted(
+                (
+                    source / name.decode("utf-8", errors="surrogateescape")
+                    for name in result.stdout.split(b"\0")
+                    if name
+                    and fnmatch.fnmatchcase(
+                        name.decode("utf-8", errors="surrogateescape"), pattern
+                    )
+                ),
+                key=lambda path: path.name,
+            )
+
+
+def open_source_file(source: Path) -> tuple[object, subprocess.Popen | None]:
+    try:
+            return source.open("rb"), None
+    except PermissionError:
+            if os.geteuid() == 0:
+                raise
+            sudo = shutil.which("sudo")
+            if sudo is None:
+                raise PermissionError("读取 pstore 记录需要权限，但系统中找不到 sudo")
+            process = subprocess.Popen(
+                [sudo, "cat", "--", str(source)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if process.stdout is None:
+                raise OSError("无法读取提权命令的输出")
+            return process.stdout, process
+
+
+def copy_record(source: Path, raw_dir: Path) -> dict:
+    try:
+            before = source.stat()
+    except PermissionError:
+            before = None
+
+    fd, temporary_name = tempfile.mkstemp(prefix=".pstore-record.", dir=raw_dir)
+    try:
+            digest = hashlib.sha256()
+            size = 0
+            input_file, process = open_source_file(source)
+            with os.fdopen(fd, "wb") as output_file:
+                try:
+                    while chunk := input_file.read(1024 * 1024):
+                        output_file.write(chunk)
+                        digest.update(chunk)
+                        size += len(chunk)
+                finally:
+                    input_file.close()
+            if process is not None:
+                stderr = process.stderr.read() if process.stderr is not None else b""
+                if process.wait():
+                    detail = stderr.decode("utf-8", errors="replace").strip()
+                    raise OSError(detail or f"读取失败：{source}")
+
+            checksum = digest.hexdigest()
+            destination = raw_dir / source.name
+            if destination.exists():
+                old_checksum, old_size = hash_file(destination)
+                if old_checksum != checksum or old_size != size:
+                    stem = f"{source.name}.duplicate-{checksum[:12]}"
+                    destination = raw_dir / stem
+                    suffix = 2
+                    while destination.exists():
+                        old_checksum, old_size = hash_file(destination)
+                        if old_checksum == checksum and old_size == size:
+                            break
+                        destination = raw_dir / f"{stem}-{suffix}"
+                        suffix += 1
+
+            if destination.exists():
+                os.unlink(temporary_name)
+            else:
+                os.replace(temporary_name, destination)
+
+            try:
+                after = source.stat()
+            except OSError:
+                after = None
+            changed = None
+            if before is not None and after is not None:
+                changed = (
+                    before.st_size != after.st_size
+                    or before.st_mtime_ns != after.st_mtime_ns
+                    or before.st_size != size
+                )
+            return {
+                "name": source.name,
+                "raw_file": f"raw/{destination.name}",
+            "size_bytes": size,
+                "sha256": checksum,
+                "source_mtime_ns_before_copy": before.st_mtime_ns if before else None,
+                "source_changed_during_copy": changed,
+            }
+    except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+            raise
+
+
+def remove_source_file(source: Path) -> None:
+    try:
+            source.unlink()
+    except FileNotFoundError:
+            return
+    except PermissionError:
+            sudo_command(["rm", "--", str(source)])
+
+
+def archived_records(
+    raw_dir: Path, previous_records: list[dict], new_records: list[dict]
+) -> list[dict]:
+    previous = {record["raw_file"]: record for record in previous_records}
+    previous.update({record["raw_file"]: record for record in new_records})
+    records = []
+    for path in sorted(raw_dir.iterdir(), key=lambda item: item.name):
+            if not stat.S_ISREG(path.stat().st_mode):
+                continue
+            checksum, size = hash_file(path)
+            raw_file = f"raw/{path.name}"
+            old_record = previous.get(raw_file, {})
+            records.append(
+                {
+                    **old_record,
+                    "name": old_record.get("name", path.name),
+                    "raw_file": raw_file,
+                    "size_bytes": size,
+                    "sha256": checksum,
+                }
+            )
+    return sorted(records, key=lambda record: (record["name"], record["raw_file"]))
+
+
+def parse_event_header(data: bytes) -> tuple[str, int, int] | None:
+    first_line = data.partition(b"\n")[0].rstrip(b"\r")
+    match = EVENT_HEADER.fullmatch(first_line)
+    if match is None:
+        return None
+    return match.group(1).decode("ascii"), int(match.group(2)), int(match.group(3))
+
+
+def write_combined_event(
+    destination: Path, event: dict, records: list[tuple[int, dict]]
+) -> None:
+    with destination.open("wb") as output_file:
+        output_file.write(f"# 事件：{event['label']}\n".encode("utf-8"))
+        output_file.write(f"# 片段数：{len(records)}\n".encode("utf-8"))
+        output_file.write("# 原始文件：\n".encode("utf-8"))
+        for _, record in records:
+            output_file.write(
+                f"#   {record['name']}\n".encode("utf-8", errors="backslashreplace")
+            )
+        output_file.write(b"\n")
+
+        for _, record in records:
+            data = (destination.parent.parent / record["raw_file"]).read_bytes()
+            _, separator, body = data.partition(b"\n")
+            if not separator:
+                continue
+            output_file.write(body)
+            if body and not body.endswith((b"\n", b"\r")):
+                output_file.write(b"\n")
+
+
+def organize_events(run_dir: Path, records: list[dict]) -> tuple[list[dict], list[dict]]:
+    events_dir = run_dir / "events"
+    events_dir.mkdir(exist_ok=True)
+
+    events = []
+    active_events = {}
+    unassigned = []
+    for record in records:
+        raw_path = run_dir / record["raw_file"]
+        header = parse_event_header(raw_path.read_bytes())
+        if header is None:
+            unassigned.append((record, "无法识别事件标记"))
+            continue
+
+        kind, event_number, part_number = header
+        key = (kind, event_number)
+        if part_number == 1:
+            event = {
+                "label": f"{kind}#{event_number}",
+                "parts": [],
+            }
+            events.append(event)
+            active_events[key] = event
+        else:
+            event = active_events.get(key)
+            if event is None:
+                unassigned.append(
+                    (record, f"{kind}#{event_number} 缺少 Part1 起始片段")
+                )
+                continue
+        event["parts"].append((part_number, record))
+
+    for index, event in enumerate(events, start=1):
+        event["parts"].sort(key=lambda part: (part[0], part[1]["name"]))
+        filename = f"event-{index:03d}.txt"
+        write_combined_event(events_dir / filename, event, event["parts"])
+        event["combined_file"] = f"events/{filename}"
+        event["records"] = [
+            {"part": part_number, "name": record["name"], "raw_file": record["raw_file"]}
+            for part_number, record in event["parts"]
+        ]
+        event["part_numbers"] = [part_number for part_number, _ in event["parts"]]
+        event["missing_part_numbers"] = sorted(
+            set(range(1, max(event["part_numbers"]) + 1)) - set(event["part_numbers"])
+        )
+        del event["parts"]
+
+    unassigned_records = []
+    for index, (record, reason) in enumerate(unassigned, start=1):
+        filename = f"unassigned-{index:03d}.txt"
+        data = (run_dir / record["raw_file"]).read_bytes()
+        body = data
+        if parse_event_header(data) is not None:
+            _, separator, body = data.partition(b"\n")
+            if not separator:
+                body = b""
+        with (events_dir / filename).open("wb") as output_file:
+            output_file.write(
+                f"# 未归类记录：{record['name']}（{reason}）\n\n".encode(
+                    "utf-8", errors="backslashreplace"
+                )
+            )
+            output_file.write(body)
+            if body and not body.endswith((b"\n", b"\r")):
+                output_file.write(b"\n")
+        unassigned_records.append(
+            {
+                "name": record["name"],
+                "raw_file": record["raw_file"],
+                "readable_file": f"events/{filename}",
+                "reason": reason,
+            }
+        )
+    expected_files = {
+        *(event["combined_file"].split("/", 1)[1] for event in events),
+        *(record["readable_file"].split("/", 1)[1] for record in unassigned_records),
+    }
+    for path in events_dir.iterdir():
+        if (
+            re.fullmatch(r"(?:event|unassigned)-[0-9]+\.txt", path.name)
+            and path.name not in expected_files
+            and path.is_file()
+        ):
+            path.unlink()
+    return events, unassigned_records
+
+
+def write_manifest(path: Path, manifest: dict) -> None:
+    fd, temporary_name = tempfile.mkstemp(prefix=".manifest.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as manifest_file:
+            json.dump(manifest, manifest_file, indent=2, ensure_ascii=False)
+            manifest_file.write("\n")
+        os.replace(temporary_name, path)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        add_help=False,
+        description=(
+            "将 pstore 新记录并入固定归档，整理事件日志；成功后默认清理源记录。"
+        )
+    )
+    options = parser.add_argument_group("选项")
+    options.add_argument(
+        "-h", "--help", action="help", help="显示此帮助信息并退出"
+    )
+    options.add_argument(
+        "--source",
+        type=Path,
+        default=Path("/sys/fs/pstore"),
+        help="pstore 记录目录（默认：/sys/fs/pstore）",
+    )
+    options.add_argument(
+        "--output",
+        type=Path,
+        default=Path("./efi-pstore-archive"),
+        help="固定归档目录，每次运行都会合并到此处（默认：./efi-pstore-archive）",
+    )
+    options.add_argument(
+        "--pattern",
+        default="*",
+        help="要采集的文件名 glob 模式（默认：源目录中的所有文件）",
+    )
+    options.add_argument(
+        "--keep-source",
+        action="store_true",
+        help="保留 pstore 中的源文件；默认在归档和清单写入成功后删除",
+    )
+    args = parser.parse_args()
+
+    try:
+        source = args.source.resolve(strict=True)
+        if not source.is_dir():
+            parser.error(f"源路径不是目录：{source}")
+        output_root = args.output.resolve()
+        if (
+            output_root == source
+            or source in output_root.parents
+            or output_root in source.parents
+        ):
+            parser.error("归档目录不能与 pstore 源目录重叠")
+
+        source_files = list_source_files(source, args.pattern)
+        output_root.mkdir(parents=True, exist_ok=True)
+        raw_dir = output_root / "raw"
+        raw_dir.mkdir(exist_ok=True)
+        if not raw_dir.is_dir():
+            parser.error(f"raw 路径不是目录：{raw_dir}")
+
+        manifest_path = output_root / "manifest.json"
+        previous_records = []
+        if manifest_path.exists():
+            try:
+                previous_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                previous_records = previous_manifest.get("records", [])
+                if not isinstance(previous_records, list):
+                    raise ValueError("manifest.json 中 records 字段格式错误")
+            except (OSError, json.JSONDecodeError, ValueError) as error:
+                print(f"读取旧清单失败：{error}", file=sys.stderr)
+                return 1
+
+        new_records = []
+        errors = []
+        for record in source_files:
+            try:
+                copied = copy_record(record, raw_dir)
+                new_records.append(copied)
+                if copied["source_changed_during_copy"] is True:
+                    errors.append(
+                        {
+                            "name": record.name,
+                            "error": "复制期间源文件发生变化，本次不会删除源文件",
+                        }
+                    )
+            except OSError as error:
+                errors.append(
+                    {"name": record.name, "error": f"{type(error).__name__}: {error}"}
+                )
+
+        all_records = archived_records(raw_dir, previous_records, new_records)
+        if not source_files and not all_records:
+            parser.error(
+                f"{source} 中没有匹配 {args.pattern!r} 的源文件，归档 raw/ 也为空"
+            )
+
+        updated_at = datetime.now(timezone.utc)
+        manifest = {
+            "format_version": 3,
+            "updated_at_utc": updated_at.isoformat(),
+            "source_directory": str(source),
+            "archive_directory": str(output_root),
+            "records": all_records,
+            "events": [],
+            "unassigned_records": [],
+            "errors": errors,
+        }
+        manifest["events"], manifest["unassigned_records"] = organize_events(
+            output_root, all_records
+        )
+        write_manifest(manifest_path, manifest)
+
+        if source_files and not args.keep_source and not errors:
+            for record in source_files:
+                try:
+                    remove_source_file(record)
+                except OSError as error:
+                    errors.append(
+                        {
+                            "name": record.name,
+                            "error": f"归档已完成，但删除源文件失败：{error}",
+                        }
+                    )
+            manifest["errors"] = errors
+            if errors:
+                write_manifest(manifest_path, manifest)
+
+        print(f"固定归档目录：{output_root}")
+        print(f"本次发现源文件：{len(source_files)}")
+        print(f"本次新增/合并归档：{len(new_records)}")
+        print(f"raw 中累计原始文件：{len(all_records)}")
+        print(f"识别事件：{len(manifest['events'])}")
+        if manifest["unassigned_records"]:
+            print(f"未归类记录：{len(manifest['unassigned_records'])}")
+        print(f"清单文件：{manifest_path}")
+        if args.keep_source and source_files:
+            print("已按参数保留 pstore 源文件")
+        elif source_files and not errors:
+            print(f"已从 pstore 删除 {len(source_files)} 个已归档源文件")
+        if errors:
+            for failure in errors:
+                print(f"错误 {failure['name']}：{failure['error']}", file=sys.stderr)
+            return 1
+        return 0
+    except OSError as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

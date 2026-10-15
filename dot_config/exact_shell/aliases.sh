@@ -31,9 +31,10 @@ alias kate-which='do-which kate'
 
 alias base64-edit='enc-edit "base64" "base64 -d"'
 
-alias watch-mem='watch -n 2   -- free -h'
-alias watch-nvi='watch -n 0.5 -- nvidia-smi'
-alias watch-nft='watch -n 0.2 -- sudo nft list ruleset'
+alias watch-mem='  watch -n 2   -- free -h'
+alias watch-nvi='  watch -n 0.5 -- nvidia-smi'
+alias watch-nft='  watch -n 0.2 -- sudo nft list ruleset'
+alias watch-mpris='watch -n 0.1 -- mpris-ctl --player active info %full'
 
 alias sude='sudo -E'
 
@@ -46,7 +47,7 @@ alias ls='eza \
     --binary \
     --group \
     --git \
-' # End of `alias ls`
+' # alias ls
 
 alias ll='ls --long'
 alias la='ll --all'
@@ -56,14 +57,14 @@ alias la='ll --all'
 alias bbdown='BBDown \
     --file-pattern "<videoTitle> [<bvid>]" \
     --multi-file-pattern "<videoTitle> [<bvid>]/[P<pageNumberWithZero>] <pageTitle>" \
-' # End of `alias bbdown`
+' # alias bbdown
 
 ## yt-dlp
 alias yt-dlp='yt-dlp \
     --cookies-from-browser firefox \
     --embed-metadata \
     --embed-thumbnail \
-' # End of `alias yt-dlp`
+' # alias yt-dlp
 
 ## Package Manage
 alias ycr='yc -R'
