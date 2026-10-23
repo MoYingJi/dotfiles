@@ -60,6 +60,9 @@
     // 我不要 GitHub Copilot 广告！
     "terminal.integrated.initialHint": false,
 
+    // 自动接受聊天所作更改的秒数
+    "chat.editing.autoAcceptDelay": 100,
+
     "workbench.tree.indent": 20,
     "workbench.list.smoothScrolling": true,
 

@@ -3,9 +3,17 @@
 
 # === HOME === #
 
-# pnpm home
-command -v pnpm >/dev/null 2>&1 && export PNPM_HOME="$HOME/.local/share/pnpm"
-test -n "$PNPM_HOME"            && export PATH="$PNPM_HOME/bin:$PATH"
+# pnpm
+test -z "$PNPM_HOME" && command -v pnpm >/dev/null 2>&1 \
+    && export PNPM_HOME="$HOME/.local/share/pnpm"
+test -n "$PNPM_HOME" \
+    && export PATH="$PNPM_HOME/bin:$PATH"
+
+# dotnet
+test -z "$DOTNET_ROOT" && command -v dotnet >/dev/null 2>&1 \
+    && export DOTNET_ROOT="$HOME/.dotnet"
+test -n "$DOTNET_ROOT" \
+    && export PATH="$DOTNET_ROOT/tools:$PATH"
 
 # === PATH === #
 export PATH="$HOME/.local/bin/:$PATH"
