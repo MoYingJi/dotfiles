@@ -8,15 +8,15 @@
 
 # Shorin Contrib
 # LICENSE: GPL-3.0-only
-# [".local/binScript/pac"]
+# [".local/bin/chezmoi/pac"]
 #     type = "file"
 #     url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pac"
 #     executable = true
-# [".local/binScript/pacr"]
+# [".local/bin/chezmoi/pacr"]
 #     type = "file"
 #     url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacr"
 #     executable = true
-# [".local/binScript/pacrrr"]
+# [".local/bin/chezmoi/pacrrr"]
 #     type = "file"
 #     url = "https://github.com/SHORiN-KiWATA/shorin-contrib/raw/refs/heads/main/pacman/pacrrr"
 #     executable = true

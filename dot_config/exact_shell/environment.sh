@@ -17,9 +17,7 @@ test -n "$DOTNET_ROOT" \
 
 # === PATH === #
 export PATH="$HOME/.local/bin/:$PATH"
-export PATH="$HOME/.local/binInject/:$PATH"
-export PATH="$HOME/.local/binCmd/:$PATH"
-export PATH="$HOME/.local/binScript/:$PATH"
+export PATH="$HOME/.local/bin/chezmoi/:$PATH"
 
 
 # === 环境 === #

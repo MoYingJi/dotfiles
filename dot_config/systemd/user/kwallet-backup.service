@@ -6,7 +6,7 @@ Conflicts=shutdown.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash %h/.local/binService/kwallet-backup %h/.local/share/kwalletd
+ExecStart=/usr/bin/bash %h/.local/libexec/chezmoi/kwallet-backup %h/.local/share/kwalletd
 RemainAfterExit=yes
 StandardOutput=journal+console
 StandardError=journal+console

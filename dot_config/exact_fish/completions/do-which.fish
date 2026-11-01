@@ -1,4 +1,4 @@
-# for .local/binCmd/do-which
+# for .local/bin/chezmoi/do-which
 
 command -v do-which >/dev/null 2>&1; or exit 0
 
