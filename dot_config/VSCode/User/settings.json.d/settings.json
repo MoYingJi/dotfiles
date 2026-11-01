@@ -18,6 +18,7 @@
         "*.ttml": "xml",
     },
 
+    // Schema support
     "json.schemaDownload.trustedDomains": {
         "https://developer.microsoft.com/json-schemas/": true,
         "https://json-schema.org/": true,
@@ -31,7 +32,7 @@
     },
 
     "json.schemas": [
-        // VSCode & Chezmoi 配置文件 Scheme
+        // VS Code 与 chezmoi 设置文件的 JSON Schema
         {
             "fileMatch": ["User/settings.json.d/*.{json,jsonc}"],
             "url": "vscode://schemas/settings/user",
