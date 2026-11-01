@@ -15,19 +15,30 @@
 .zshrc
 {{- end }}
 
-###### /.config ######
+###### ~/.config ######
 
 {{- if not (lookPath "bilibili") }}
 .config/bilibili
+{{- end }}
+
+{{- if not (lookPath "code") }}
+.config/code-flags.conf
+.config/VSCode
+.config/Code
+.config/Code - Insiders
+.config/Code - OSS
 {{- end }}
 
 {{- if not (lookPath "fastfetch") }}
 .config/fastfetch
 {{- end }}
 
+{{- if not (lookPath "fc-list") }}
+.config/fontconfig
+{{- end }}
+
 {{- if not (lookPath "fcitx5") }}
 .config/fcitx5
-.local/share/fcitx5
 {{- end }}
 
 {{- if not (lookPath "fish") }}
@@ -77,7 +88,6 @@
 
 {{- if not (lookPath "waylyrics") }}
 .config/waylyrics
-.local/share/waylyrics
 {{- end }}
 
 {{- if not (lookPath "wechat-universal") }}
@@ -86,18 +96,6 @@
 
 {{- if not (lookPath "wireplumber") }}
 .config/wireplumber
-{{- end }}
-
-{{- if not (lookPath "code") }}
-.config/code-flags.conf
-.config/VSCode
-.config/Code
-.config/Code - Insiders
-.config/Code - OSS
-{{- end }}
-
-{{- if not (lookPath "fc-list") }}
-.config/fontconfig
 {{- end }}
 
 ###### ~/.local/bin/chezmoi ######
@@ -110,12 +108,9 @@
 .local/bin/chezmoi/codews
 {{- end }}
 
-{{- if not (lookPath "curl") }}
-.local/bin/chezmoi/gcurl
-{{- end }}
-
-{{- if not (lookPath "ffmpeg") }}
-.local/bin/chezmoi/mkv-merge
+{{- if not (lookPath "python3") }}
+.local/bin/chezmoi/cpu-control
+.local/bin/chezmoi/ttmlfmt
 {{- end }}
 
 {{- if not (and (lookPath "ffmpeg") (lookPath "ffprobe")) }}
@@ -126,18 +121,30 @@
 .local/bin/chezmoi/firefox
 {{- end }}
 
+{{- if not (lookPath "curl") }}
+.local/bin/chezmoi/gcurl
+{{- end }}
+
+{{- if not (lookPath "git") }}
+.local/bin/chezmoi/ghc
+.local/bin/chezmoi/git-amend-date
+{{- end }}
+
 {{- if not (lookPath "fcitx5") }}
 .local/bin/chezmoi/input-env
 {{- end }}
 
-{{- if not (lookPath "git") }}
-.local/bin/chezmoi/git-amend-date
-.local/bin/chezmoi/ghc
+{{- if not (lookPath "/usr/bin/kate") }}
+.local/bin/chezmoi/kate
+.local/bin/chezmoi/kate-hosts
 {{- end }}
 
-{{- if not (lookPath "/usr/bin/kate") }}
-.local/bin/chezmoi/kate-hosts
-.local/bin/chezmoi/kate
+{{- if not (lookPath "plasmashell") }}
+.local/bin/chezmoi/kde-restart
+{{- end }}
+
+{{- if not (lookPath "ffmpeg") }}
+.local/bin/chezmoi/mkv-merge
 {{- end }}
 
 {{- if not (lookPath "obs") }}
@@ -148,20 +155,11 @@
 .local/bin/chezmoi/uri-encode
 {{- end }}
 
-{{- if not (lookPath "plasmashell") }}
-.local/bin/chezmoi/kde-restart
-{{- end }}
-
-{{- if not (lookPath "python3") }}
-.local/bin/chezmoi/cpu-control
-.local/bin/chezmoi/ttmlfmt
-{{- end }}
-
 {{- if not (lookPath "yay") }}
 .local/bin/chezmoi/yc
 {{- end }}
 
-###### ~/.local/libexec/chezmoi and systemd service ######
+###### kwallet-backup service ######
 
 {{- if not (lookPath "kwalletd6") }}
 .config/systemd/user/kwallet-backup.service
@@ -170,15 +168,21 @@
 
 ###### ~/.local/share/applications ######
 
-{{- if not (lookPath "pacman") }}
-.local/share/applications/pacman-install.desktop
-{{- end }}
-
 {{- if not (and (lookPath "ffmpeg") (lookPath "ffprobe")) }}
 .local/share/applications/ffprobe-output.desktop
 {{- end }}
 
-###### KDE 图标 ######
+{{- if not (lookPath "pacman") }}
+.local/share/applications/pacman-install.desktop
+{{- end }}
+
+###### ~/.local/share/fcitx5 ######
+
+{{- if not (lookPath "fcitx5") }}
+.local/share/fcitx5
+{{- end }}
+
+###### ~/.local/share/kio ######
 
 {{- if not (lookPath "plasmashell") }}
 .local/share/kio
@@ -186,4 +190,10 @@
 
 {{- if not (lookPath "localsend") }}
 .local/share/kio/servicemenus/share-with-localsend.desktop
+{{- end }}
+
+###### ~/.local/share/waylyrics ######
+
+{{- if not (lookPath "waylyrics") }}
+.local/share/waylyrics
 {{- end }}
