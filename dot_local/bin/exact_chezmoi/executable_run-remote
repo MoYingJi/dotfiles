@@ -1,0 +1,243 @@
+#!/usr/bin/bash
+# run-remote — 在远端通过 ssh 执行本地脚本
+# 默认 stdin 模式；指定 -t 时自动切换 inline 模式
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+用法: run-remote [选项]... <user@host> <script> [script_arg]...
+  或: run-remote [选项]... -H <user@host> -S <script> [--] [script_arg]...
+
+通过 SSH 在远端主机执行本地 shell 脚本。
+选项可以放在主机名前，也可以放在主机名后、脚本名前；-- 用于结束选项。
+
+<script> 可以是路径（含 / 或以 ~ 开头），也可以是裸命令名，
+此时会按 RUN_REMOTE_PATH、~/.local/bin、$PATH 的顺序在本机查找。
+
+SSH 选项:
+    -p PORT     连接远端主机的指定端口
+    -i FILE     指定身份文件（私钥）
+    -J HOST     通过跳板机 HOST 连接
+    -l USER     以 USER 身份登录远端主机
+    -o K=V      传递额外的 ssh 选项（可重复）
+    -t          分配伪终端（自动切换为 inline 模式）
+    -T          禁用伪终端分配
+    -q          安静模式
+    -L          在登录 shell 中运行脚本（bash -l）
+
+Runner 选项:
+    -E K=V      在远端设置环境变量（可重复）
+    -H HOST     远端目标（替代位置参数 <user@host>）
+    -S FILE     本地脚本路径或命令名（替代位置参数 <script>）
+    -I          强制 inline 模式（脚本内容通过命令行传递）
+    -n          试运行：仅打印 ssh 命令，不执行
+    -v          执行前打印 ssh 命令
+    -h          显示此帮助并退出
+
+环境变量:
+    RUN_REMOTE_PATH  额外的前置搜索目录（以冒号分隔），优先于 ~/.local/bin 和 $PATH
+
+示例:
+    run-remote -p 2222 -i ~/.ssh/id_ed25519 user@host ./deploy.sh --env prod
+    run-remote user@host -p 2222 -- arcaea-chfr --view
+    run-remote -p 2222 user@host -- arcaea-chfr --view
+    run-remote user@host deploy.sh            # 使用 ~/.local/bin/deploy.sh
+    run-remote -l root -p 2222 -E DEBUG=1 host task.sh arg1 "arg with space"
+    run-remote -t -l root host sudo_task.sh
+    run-remote -n -p 2222 user@host deploy.sh --env prod
+EOF
+}
+
+# 解析脚本路径：含 / 视为路径；裸名在本机 bin 目录中查找
+resolve_script() {
+    local name=$1
+    local dir
+    local search
+
+    if [[ $name == */* ]]; then
+        printf '%s\n' "$name"
+        return 0
+    fi
+
+    search="${RUN_REMOTE_PATH:+$RUN_REMOTE_PATH:}$HOME/.local/bin:${PATH:-}"
+    IFS=: read -ra dirs <<< "$search"
+    for dir in "${dirs[@]}"; do
+        [[ -z $dir ]] && continue
+        if [[ -f $dir/$name && -r $dir/$name ]]; then
+            printf '%s\n' "$dir/$name"
+            return 0
+        fi
+    done
+    return 1
+}
+
+ssh_opts=()          # 传给 ssh 的选项
+envs=()              # 远程环境变量 NAME=VALUE
+target=""
+script=""
+use_inline=0
+use_login=0
+dry_run=0
+verbose=0
+
+# 在主机名之前或主机名与脚本之间解析选项；脚本之后的参数原样传递。
+parse_options=1
+while (($#)); do
+    if ((parse_options)) && [[ $1 == -- ]]; then
+        parse_options=0
+        shift
+        continue
+    fi
+
+    if ((parse_options)) && [[ $1 == -* && $1 != - ]]; then
+        token=${1#-}
+        shift
+        while [[ -n $token ]]; do
+            opt=${token:0:1}
+            token=${token:1}
+            case $opt in
+                p|i|J|l|o|E|H|S)
+                    if [[ ${token} == "" ]]; then
+                        if (($# == 0)); then
+                            echo "run-remote: 选项 -$opt 缺少参数" >&2
+                            exit 1
+                        fi
+                        option_arg=$1
+                        shift
+                    else
+                        option_arg=$token
+                    fi
+                    case $opt in
+                        p) ssh_opts+=(-p "$option_arg") ;;
+                        i) ssh_opts+=(-i "$option_arg") ;;
+                        J) ssh_opts+=(-J "$option_arg") ;;
+                        l) ssh_opts+=(-l "$option_arg") ;;
+                        o) ssh_opts+=(-o "$option_arg") ;;
+                        E) envs+=("$option_arg") ;;
+                        H) target=$option_arg ;;
+                        S) script=$option_arg ;;
+                    esac
+                    token=""
+                    ;;
+                t) ssh_opts+=(-t); use_inline=1 ;;
+                T) ssh_opts+=(-T) ;;
+                q) ssh_opts+=(-q) ;;
+                L) use_login=1 ;;
+                I) use_inline=1 ;;
+                n) dry_run=1 ;;
+                v) verbose=1 ;;
+                h) usage; exit 0 ;;
+                *)
+                    echo "run-remote: 无效选项 -- '-$opt'" >&2
+                    usage >&2
+                    exit 1
+                    ;;
+            esac
+        done
+        continue
+    fi
+
+    if [[ -z $target ]]; then
+        target=$1
+        shift
+        continue
+    fi
+    if [[ -z $script ]]; then
+        script=$1
+        shift
+        break
+    fi
+    break
+done
+
+if [[ -z $target ]]; then
+    echo "run-remote: 缺少 <user@host>" >&2
+    usage >&2
+    exit 1
+fi
+if [[ -z $script ]]; then
+    echo "run-remote: 缺少 <script>" >&2
+    usage >&2
+    exit 1
+fi
+
+# 允许在脚本参数前用 -- 明确结束 run-remote 的选项解析。
+if (($#)) && [[ $1 == -- ]]; then
+    shift
+fi
+script_args=("$@")
+
+# 展开脚本路径开头的 ~
+if [[ $script == "~"* ]]; then
+    script=${script/#\~/$HOME}
+fi
+
+# 裸名则在本机 bin 中解析
+if ! resolved=$(resolve_script "$script"); then
+    echo "run-remote: 找不到脚本: $script（已搜索 ~/.local/bin 和 \$PATH）" >&2
+    exit 1
+fi
+script=$resolved
+
+if [[ ! -r $script ]]; then
+    echo "run-remote: 无法读取脚本: $script" >&2
+    exit 1
+fi
+
+# 逐项转义脚本参数
+remote_args=""
+for a in "${script_args[@]}"; do
+    remote_args+=" $(printf '%q' "$a")"
+done
+
+# 组装 env 前缀
+env_prefix=""
+for e in "${envs[@]}"; do
+    env_prefix+="$(printf '%q' "$e") "
+done
+
+# 决定 bash 形态
+if (( use_login )); then
+    bash_flag="-l"
+else
+    bash_flag=""
+fi
+
+# 组装远程命令
+if (( use_inline )); then
+    # inline: 脚本内容作为 bash -c 的参数；stdin 空闲，可配合 -t
+    content=$(<"$script")
+    inner="bash ${bash_flag:+$bash_flag }-c $(printf '%q' "$content") $(printf '%q' "$(basename "$script")")$remote_args"
+    if [[ -n $env_prefix ]]; then
+        remote_cmd="env ${env_prefix}${inner}"
+    else
+        remote_cmd="$inner"
+    fi
+    stdin_src=/dev/null
+else
+    # stdin: 默认模式，脚本走 stdin
+    if [[ -n $env_prefix ]]; then
+        remote_cmd="env ${env_prefix}bash ${bash_flag:+$bash_flag }-s --$remote_args"
+    else
+        remote_cmd="bash ${bash_flag:+$bash_flag }-s --$remote_args"
+    fi
+    stdin_src=$script
+fi
+
+print_cmd() {
+    printf 'ssh'
+    printf ' %q' "${ssh_opts[@]}"
+    printf ' %q' "$target"
+    printf ' %q' "$remote_cmd"
+    printf ' < %q\n' "$stdin_src"
+}
+
+if (( dry_run )); then
+    print_cmd
+    exit 0
+fi
+if (( verbose )); then
+    print_cmd >&2
+fi
+
+exec ssh "${ssh_opts[@]}" "$target" "$remote_cmd" < "$stdin_src"

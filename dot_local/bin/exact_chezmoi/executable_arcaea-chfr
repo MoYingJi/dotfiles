@@ -1,0 +1,174 @@
+#!/system/bin/sh
+
+set -eu
+
+default_package=moe.low.arc
+max_fragments=29997
+
+usage() {
+    printf '用法：%s <残片数> [包名]\n' "${0##*/}" >&2
+    printf '查看：%s --view [包名]\n' "${0##*/}" >&2
+    printf '包名：moe.low.arc（默认/国际服）；com.xd.arcaea.tapcn（国服）\n' >&2
+    printf '残片数范围：0–%s\n' "$max_fragments" >&2
+}
+
+if [ "$#" -eq 1 ] && { [ "$1" = '-h' ] || [ "$1" = '--help' ]; }; then
+    usage
+    exit 0
+fi
+
+view_mode=0
+case "${1:-}" in
+    -v|--view)
+        view_mode=1
+        if [ "$#" -gt 2 ]; then
+            usage
+            exit 2
+        fi
+        package=${2:-$default_package}
+        ;;
+    *)
+        if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+            usage
+            exit 2
+        fi
+        fragments=$1
+        package=${2:-$default_package}
+
+        case "$fragments" in
+            ''|*[!0-9]*)
+                printf '错误：残片数必须是非负整数。\n' >&2
+                exit 2
+                ;;
+            0|[1-9]*)
+                ;;
+            *)
+                printf '错误：残片数不能有前导零。\n' >&2
+                exit 2
+                ;;
+        esac
+
+        if ! awk -v count="$fragments" -v maximum="$max_fragments" \
+            'BEGIN { exit !(count <= maximum) }'; then
+            printf '错误：残片数不能超过 %s。\n' "$max_fragments" >&2
+            exit 2
+        fi
+        ;;
+esac
+
+if ! printf '%s\n' "$package" |
+    grep -Eq '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$'; then
+    printf '错误：无效的 Android 包名：%s\n' "$package" >&2
+    exit 2
+fi
+
+for command_name in awk grep md5sum sed su; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        printf '错误：找不到必要命令：%s\n' "$command_name" >&2
+        exit 1
+    fi
+done
+
+if [ "$view_mode" -eq 1 ]; then
+    if ! su -c "/system/bin/sh -s -- '$package'" <<'ROOT_VIEW'
+set -eu
+
+package=$1
+file="/data/data/$package/shared_prefs/Cocos2dxPrefsFile.xml"
+
+if [ ! -f "$file" ]; then
+    printf '错误：找不到偏好设置文件：%s\n' "$file" >&2
+    exit 1
+fi
+
+fragment_matches=$(grep -Ec '<int name="fr_v" value="[^"]*" />' "$file" || true)
+checksum_matches=$(grep -Ec '<string name="fr_k">[^<]*</string>' "$file" || true)
+if [ "$fragment_matches" != 1 ] || [ "$checksum_matches" != 1 ]; then
+    printf '错误：文件中应各有一个 fr_v 和 fr_k 条目，实际找到 %s 个 fr_v、%s 个 fr_k。\n' \
+        "$fragment_matches" "$checksum_matches" >&2
+    exit 1
+fi
+
+fragments=$(sed -n 's/.*<int name="fr_v" value="\([^"]*\)" \/>.*/\1/p' "$file")
+checksum=$(sed -n 's/.*<string name="fr_k">\([^<]*\)<\/string>.*/\1/p' "$file")
+case "$fragments" in
+    ''|*[!0-9]*)
+        printf '错误：fr_v 条目不是有效的非负整数。\n' >&2
+        exit 1
+        ;;
+esac
+
+expected=$(printf '%sok%s' "$fragments" "$fragments" | md5sum)
+expected=${expected%% *}
+
+case "$checksum" in
+    *[!0-9a-fA-F]*|'')
+        printf '当前残片数：%s\n当前校验和：格式无效\n' "$fragments"
+        printf '警告：fr_k 与 fr_v 不匹配；预期校验和：%s\n' "$expected"
+        ;;
+    *)
+        if [ "${#checksum}" -ne 32 ]; then
+            printf '当前残片数：%s\n当前校验和：格式无效\n' "$fragments"
+            printf '警告：fr_k 与 fr_v 不匹配；预期校验和：%s\n' "$expected"
+        else
+            printf '当前残片数：%s\n当前校验和：%s\n' "$fragments" "$checksum"
+            if [ "$checksum" != "$expected" ]; then
+                printf '警告：fr_k 与 fr_v 不匹配；预期校验和：%s\n' "$expected"
+            fi
+        fi
+        ;;
+esac
+ROOT_VIEW
+    then
+        printf '错误：root 授权或读取操作失败。\n' >&2
+        exit 1
+    fi
+    exit 0
+fi
+
+checksum=$(printf '%sok%s' "$fragments" "$fragments" | md5sum)
+checksum=${checksum%% *}
+if [ "${#checksum}" -ne 32 ]; then
+    printf '错误：无法计算 fr_k 校验和。\n' >&2
+    exit 1
+fi
+
+if ! su -c "/system/bin/sh -s -- '$fragments' '$package' '$checksum'" <<'ROOT_WRITE'
+set -eu
+
+fragments=$1
+package=$2
+checksum=$3
+file="/data/data/$package/shared_prefs/Cocos2dxPrefsFile.xml"
+
+if [ ! -f "$file" ]; then
+    printf '错误：找不到偏好设置文件：%s\n' "$file" >&2
+    exit 1
+fi
+
+fragment_matches=$(grep -Ec '<int name="fr_v" value="[^"]*" />' "$file" || true)
+checksum_matches=$(grep -Ec '<string name="fr_k">[^<]*</string>' "$file" || true)
+if [ "$fragment_matches" != 1 ] || [ "$checksum_matches" != 1 ]; then
+    printf '错误：文件中应各有一个 fr_v 和 fr_k 条目，实际找到 %s 个 fr_v、%s 个 fr_k。\n' \
+        "$fragment_matches" "$checksum_matches" >&2
+    exit 1
+fi
+
+sed -i \
+    -e "s|<int name=\"fr_v\" value=\"[^\"]*\" />|<int name=\"fr_v\" value=\"$fragments\" />|" \
+    -e "s|<string name=\"fr_k\">[^<]*</string>|<string name=\"fr_k\">$checksum</string>|" \
+    "$file"
+
+fragment_matches=$(grep -Ec "<int name=\"fr_v\" value=\"$fragments\" />" "$file" || true)
+checksum_matches=$(grep -Ec "<string name=\"fr_k\">$checksum</string>" "$file" || true)
+if [ "$fragment_matches" != 1 ] || [ "$checksum_matches" != 1 ]; then
+    printf '错误：修改后校验失败：%s\n' "$file" >&2
+    exit 1
+fi
+
+printf '已更新：%s（残片数：%s，校验和：%s）。\n' "$file" "$fragments" "$checksum"
+ROOT_WRITE
+then
+    printf '错误：root 授权或修改操作失败。\n' >&2
+    exit 1
+fi
