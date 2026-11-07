@@ -3,14 +3,6 @@ local vim = vim
 
 return {
     {
-        -- 主题
-        "folke/tokyonight.nvim",
-        lazy = false, -- 如果这是你的主配色方案 请确保我们在启动时加载它
-        priority = 1000, -- 确保在所有其他启动插件之前加载此插件
-        config = function() vim.cmd([[colorscheme tokyonight]]) end,
-    },
-
-    {
         -- 状态栏
         "nvim-lualine/lualine.nvim",
         dependencies = { "nvim-tree/nvim-web-devicons" },
@@ -18,13 +10,15 @@ return {
     },
 
     {
-        -- 高亮显示
-        "nvim-treesitter/nvim-treesitter",
-        branch = 'master',
-        lazy = false,
-        build = ":TSUpdate",
-        config = function() require('nvim-treesitter.configs').setup {
-            auto_install = true
-        } end,
+        -- 模糊查找
+        "ibhagwan/fzf-lua",
+        dependencies = { "nvim-tree/nvim-web-devicons" },
+        config = function() require("fzf-lua").setup {} end,
+    },
+
+    {
+        -- 哪个键来着？
+        "folke/which-key.nvim",
+        event = "VeryLazy",
     },
 }

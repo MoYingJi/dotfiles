@@ -42,7 +42,7 @@ require("lazy").setup({
         url_format = url_format,
     },
     -- 安装插件时将使用的配色方案
-    install = { colorscheme = { "habamax" } },
+    install = { colorscheme = { "default" } },
     -- 自动检查插件更新
     checker = { enabled = false },
 })
