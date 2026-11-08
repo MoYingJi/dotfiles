@@ -63,6 +63,8 @@
 
     // 自动接受聊天所作更改的秒数
     "chat.editing.autoAcceptDelay": 100,
+    // 远程连接配置
+    "chat.agentHost.remoteConnections": "githubEnvironment",
 
     "workbench.tree.indent": 20,
     "workbench.list.smoothScrolling": true,

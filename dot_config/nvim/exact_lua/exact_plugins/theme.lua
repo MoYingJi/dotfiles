@@ -1,9 +1,7 @@
----@diagnostic disable-next-line: undefined-global
-local vim = vim
-
 -- 主题配置
 
 local default_repo = "folke/tokyonight.nvim"
+local default_colorscheme = ""
 
 local themes = {
     ["folke/tokyonight.nvim"] = {
@@ -12,21 +10,42 @@ local themes = {
     ["tiesen243/vercel.nvim"] = {
         colorscheme = "vercel",
         config = function()
-            require("vercel").setup({
+            require("vercel") {
                 theme = "dark"
-            })
+            }
         end
     },
 }
 
 -- 计算
 
-local plugins = {}
+if default_colorscheme and default_colorscheme ~= "" then
+    if default_repo and default_repo ~= "" then
+        error("不能同时指定 default_colorscheme 和 default_repo")
+    end
 
-local default_colorscheme = assert(assert(themes[default_repo]).colorscheme)
+    vim.cmd.colorscheme(default_colorscheme)
+elseif default_repo and default_repo ~= "" then
+    local theme_opts = themes[default_repo]
+    if not theme_opts then
+        error("未找到默认主题的配置")
+    end
+    if not theme_opts.colorscheme or theme_opts.colorscheme == "" then
+        error("默认主题必须指定 colorscheme")
+    end
+else
+    error("必须指定 default_repo 或 default_colorscheme")
+end
+
+local plugins = {}
 
 for repo, opts in pairs(themes) do
     local is_default = (repo == default_repo)
+    local this_colorscheme = opts and opts.colorscheme
+
+    if (is_default) then
+        assert(this_colorscheme ~= nil and this_colorscheme ~= "", "默认主题必须指定 colorscheme")
+    end
 
     ---@type table<string, any>
     local plugin = {
@@ -49,7 +68,7 @@ for repo, opts in pairs(themes) do
     if is_default then
         plugin.config = function()
             if user_config then user_config() end
-            vim.cmd.colorscheme(default_colorscheme)
+            vim.cmd.colorscheme(this_colorscheme)
         end
     elseif user_config then
         plugin.config = user_config

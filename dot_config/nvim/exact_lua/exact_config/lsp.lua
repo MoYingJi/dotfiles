@@ -1,20 +1,19 @@
----@diagnostic disable-next-line: undefined-global
-local vim = vim
-
 local M = {}
 
 M.servers = {
-    lua_ls = "lua-language-server",
-    rust_analyzer = "rust-analyzer",
     clangd = "clangd",
-    ts_ls = "typescript-language-server",
+    rust_analyzer = "rust-analyzer",
     pyright = "pyright-langserver",
     pylsp = "pylsp",
+    lua_ls = "lua-language-server",
+    termux_language_server = "termux-language-server",
     bashls = "bash-language-server",
+    fish_lsp = "fish-lsp",
+    ts_ls = "typescript-language-server",
+    eslint = "vscode-eslint-language-server",
+    cssls = "vscode-css-language-server",
     jsonls = "vscode-json-language-server",
     yamlls = "yaml-language-server",
-    cssls = "vscode-css-language-server",
-    eslint = "vscode-eslint-language-server",
     marksman = "marksman",
 }
 
@@ -37,6 +36,10 @@ vim.api.nvim_create_autocmd("LspAttach", {
         vim.keymap.set("n", "gd", vim.lsp.buf.definition, { buffer = ev.buf, desc = "Go to Definition | 转到定义" })
     end,
 })
+
+vim.diagnostic.config {
+    virtual_text = true
+}
 
 function M.setup()
     local capabilities = require("blink.cmp").get_lsp_capabilities()
@@ -95,7 +98,7 @@ function M.setup()
         if #missing > 0 then
             table.sort(missing)
             vim.notify(
-                ("当前文件类型 %q 缺少 LSP：%s\n可运行 :LspInstall <server> 按需安装。")
+                ("当前文件类型 %q 缺少 LSP: %s\n可运行 ':LspInstall <server>' 按需安装。")
                     :format(filetype, table.concat(missing, ", ")),
                 vim.log.levels.WARN,
                 { title = "LSP" }
@@ -113,7 +116,7 @@ function M.setup()
         callback = function(args) notified[args.buf] = nil end,
     })
 
-    for server, executable in pairs(M.servers) do
+    for server, _ in pairs(M.servers) do
         local config = vim.tbl_deep_extend("force", {
             capabilities = capabilities,
         }, M.server_configs[server] or {})

@@ -1,5 +1,4 @@
----@diagnostic disable: undefined-global
-local vim = vim
+-- 修复语言环境
 
 if vim.env.LANG and vim.env.LANG:match("zh_CN") then
     vim.cmd("language zh_CN.UTF-8")

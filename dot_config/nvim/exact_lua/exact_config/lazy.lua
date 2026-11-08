@@ -1,7 +1,4 @@
----@diagnostic disable-next-line: undefined-global
-local vim = vim
-
-local config = require("config.nvim_chezmoi")
+local config = require("config.chezmoi")
 
 local url_format = "https://github.com/%s.git"
 if config.ssh_github then url_format = "git@github.com:%s.git" end
@@ -11,7 +8,7 @@ if config.ssh_github then url_format = "git@github.com:%s.git" end
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
     local lazyrepo = url_format:format("folke/lazy.nvim")
-    local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
+    local out = vim.fn.system { "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath }
     if vim.v.shell_error ~= 0 then
         vim.api.nvim_echo({
             { "克隆 lazy.nvim 失败:\n", "ErrorMsg" },
@@ -30,7 +27,7 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
 
 -- 加载 lazy.nvim
-require("lazy").setup({
+require("lazy").setup {
     spec = {
         -- 添加插件
         { import = "plugins" },
@@ -45,4 +42,4 @@ require("lazy").setup({
     install = { colorscheme = { "default" } },
     -- 自动检查插件更新
     checker = { enabled = false },
-})
+}

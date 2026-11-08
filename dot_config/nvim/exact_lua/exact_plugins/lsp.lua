@@ -1,6 +1,3 @@
----@diagnostic disable-next-line: undefined-global
-local vim = vim
-
 return {
     -- LSP 配置
 
@@ -13,19 +10,17 @@ return {
     {
         "williamboman/mason.nvim",
         build = ":MasonUpdate",
-        config = function() require("mason").setup({
+        opts = {
             PATH = "prepend"
-        }) end,
+        },
     },
 
     {
         "williamboman/mason-lspconfig.nvim",
         dependencies = { "mason.nvim", "neovim/nvim-lspconfig" },
-        config = function()
-            require("mason-lspconfig").setup({
-                automatic_enable = false,
-            })
-        end,
+        opts = {
+            automatic_enable = false
+        },
     },
 
     -- 代码补全
@@ -39,8 +34,24 @@ return {
                 preset = "enter"
             },
             completion = { documentation = { auto_show = true } },
-            sources = { default = { "lsp", "path", "snippets", "buffer" } },
+            sources = {
+                default = { "lazydev", "lsp", "path", "snippets", "buffer" },
+                providers = {
+                    lazydev = {
+                        name = "LazyDev",
+                        module = "lazydev.integrations.blink",
+                        -- 让 lazydev 补全具有最高优先级 (见 `:h blink.cmp`)
+                        score_offset = 100,
+                    },
+                }
+            },
             fuzzy = { implementation = "rust" }
         },
-    }
+    },
+
+    {
+        -- 为 Neovim 提供更快的 LuaLS 配置
+        "folke/lazydev.nvim",
+        ft = "lua",
+    },
 }

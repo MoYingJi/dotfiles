@@ -1,5 +1,4 @@
----@diagnostic disable-next-line: undefined-global
-local vim = vim
+-- 自定义命令
 
 vim.api.nvim_create_user_command("S", function()
     vim.cmd("Lazy sync")

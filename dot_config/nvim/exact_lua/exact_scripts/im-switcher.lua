@@ -1,5 +1,4 @@
----@diagnostic disable-next-line: undefined-global
-local vim = vim
+-- 输入法切换器 (Fcitx5)
 
 -- 作者: DeepSeek 大人 (有修改)
 
@@ -56,5 +55,5 @@ vim.api.nvim_create_autocmd({ "InsertEnter" }, {
     callback = im_restore
 })
 
--- 在启动时先关闭输入法并保存状态，因为此时是 NORMOR MODE
+-- 在启动时先关闭输入法并保存状态，因为此时是 NORMAL MODE
 im_save_and_close()
