@@ -31,15 +31,35 @@ M.server_configs = {
     },
 }
 
+M.shebang_filetype = {
+    ["^#!.*ccrun"] = "c"
+}
+
+vim.diagnostic.config {
+    virtual_text = true
+}
+
 vim.api.nvim_create_autocmd("LspAttach", {
     callback = function(ev)
         vim.keymap.set("n", "gd", vim.lsp.buf.definition, { buffer = ev.buf, desc = "Go to Definition | 转到定义" })
     end,
 })
 
-vim.diagnostic.config {
-    virtual_text = true
-}
+vim.api.nvim_create_autocmd({"BufRead", "BufNewFile"}, {
+    pattern = "*", -- 对所有文件生效，在回调函数里再精确过滤
+    callback = function()
+        local first_line = vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]
+
+        if first_line then
+            for pattern, filetype in ipairs(M.shebang_filetype) do
+                if first_line:match(pattern) then
+                    vim.bo.filetype = filetype
+                    break
+                end
+            end
+        end
+    end,
+})
 
 function M.setup()
     local capabilities = require("blink.cmp").get_lsp_capabilities()

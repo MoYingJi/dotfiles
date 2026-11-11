@@ -1,7 +1,6 @@
 #!/usr/bin/bash
 
 if [ -z "$PRETTIER" ]; then
-
     if command -v prettier >/dev/null 2>&1; then
         PRETTIER=("prettier")
     elif command -v pnpm >/dev/null 2>&1; then
@@ -12,7 +11,7 @@ if [ -z "$PRETTIER" ]; then
     fi
 fi
 
-"${PRETTIER[@]}" \
+exec "${PRETTIER[@]}" \
     --ignore-path .prettierignore \
     --ignore-path .gitignore \
     --ignore-path .prettierignore.local \

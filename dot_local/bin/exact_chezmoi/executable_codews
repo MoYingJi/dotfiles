@@ -68,4 +68,4 @@ fi
 WORKSPACE_PATH="$(realpath "$WORKSPACE_PATH")"
 
 # 调用 code 打开指定工作区
-"${VSCODE_OPEN[@]}" "$WORKSPACE_PATH"
+exec "${VSCODE_OPEN[@]}" "$WORKSPACE_PATH"

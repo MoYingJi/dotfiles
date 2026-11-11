@@ -8,7 +8,7 @@ firefox_variants=(
 for variant in "${firefox_variants[@]}"; do
     if command -v "$variant" &> /dev/null; then
         exec "$variant" "$@"
-        exit 0
+        exit 1
     fi
 done
 

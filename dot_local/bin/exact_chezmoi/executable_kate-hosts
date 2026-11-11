@@ -1,3 +1,3 @@
 #!/usr/bin/bash
 
-kate /etc/hosts
+exec kate /etc/hosts

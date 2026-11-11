@@ -19,7 +19,7 @@ echo >&2
 
 case "$shell" in
     *fish)
-        $shell --init-command "$(cat << EOF
+        exec "$shell" --init-command "$(cat << EOF
 function fish_greeting; end
 
 function ff
@@ -33,6 +33,6 @@ EOF
 )"
         ;;
     *)
-        $shell
+        exec "$shell"
         ;;
 esac

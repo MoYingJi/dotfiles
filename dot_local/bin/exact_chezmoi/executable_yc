@@ -45,4 +45,4 @@ r="$($PM $QUERY_ARG | fzf \
 )"
 [ -z "$r" ] && exit 0
 
-$PM $1 $r
+exec $PM $1 $r

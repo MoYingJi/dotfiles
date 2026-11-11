@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-systemd-run --user --scope --collect \
+exec systemd-run --user --scope --collect \
     --unit="app-$(systemd-escape -- com.obsproject.Studio)-$$" \
     --setenv=WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
     --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \

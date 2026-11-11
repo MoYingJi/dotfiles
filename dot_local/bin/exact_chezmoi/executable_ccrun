@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -u
+
+if [ $# -lt 1 ]; then
+    echo "usage: $0 file.c [args...]" >&2
+    exit 2
+fi
+
+src=$1
+shift
+
+tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/ccrun.XXXXXX")
+trap 'rm -rf "$tmpdir"' EXIT
+
+# 把源文件复制到临时 main.c；如果第一行是 shebang，用 // 替换掉，
+# 这样既能通过编译，又能保持错误行号基本对齐。
+{
+    if IFS= read -r first < "$src" && [[ $first == '#!'* ]]; then
+        printf '//\n'
+        tail -n +2 -- "$src"
+    else
+        cat -- "$src"
+    fi
+} > "$tmpdir/main.c"
+
+cc=${CC:-cc}
+
+# 支持 CFLAGS / LDFLAGS，例如：
+# CFLAGS="-O2 -Wall" LDFLAGS="-lm" ./hello.c
+read -r -a cflags <<< "${CFLAGS:-}"
+read -r -a ldflags <<< "${LDFLAGS:-}"
+
+if ! "$cc" -x c "${cflags[@]}" -o "$tmpdir/a.out" "$tmpdir/main.c" "${ldflags[@]}"; then
+    exit 1
+fi
+
+# 子 shell 里用 exec -a 设置 argv[0]；父 shell 等待并清理
+(
+    exec -a "$src" "$tmpdir/a.out" "$@"
+)
+
+status=$?
+exit "$status"

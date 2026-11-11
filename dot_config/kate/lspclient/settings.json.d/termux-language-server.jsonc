@@ -1,0 +1,9 @@
+{
+    "servers": {
+        "termux-language-server": {
+            "command": ["nvim-mason-path-exe", "termux-language-server"],
+            "filetypes": ["bash", "sh"],
+            "rootPatterns": ["PKGBUILD"]
+        }
+    }
+}
