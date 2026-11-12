@@ -66,6 +66,12 @@ alias yt-dlp='yt-dlp \
     --embed-thumbnail \
 ' # alias yt-dlp
 
+## geodbq-system
+alias geodbq-system='geodbq \
+    --geoip /usr/share/v2ray/geoip.dat \
+    --geosite /usr/share/v2ray/geosite.dat \
+'
+
 ## Package Manage
 alias ycr='yc -R'
 alias ycrns='yc -Rns'

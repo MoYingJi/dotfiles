@@ -15,6 +15,13 @@ test -z "$DOTNET_ROOT" && command -v dotnet >/dev/null 2>&1 \
 test -n "$DOTNET_ROOT" \
     && export PATH="$DOTNET_ROOT/tools:$PATH"
 
+# go
+test -z "$GOPATH" && command -v go >/dev/null 2>&1 \
+    && export GOPATH="$HOME/.local/share/go"
+test -n "$GOPATH" \
+    && export PATH="$GOPATH/bin:$PATH"
+
+
 # === PATH === #
 export PATH="$HOME/.local/bin/:$PATH"
 export PATH="$HOME/.local/bin/chezmoi/:$PATH"
