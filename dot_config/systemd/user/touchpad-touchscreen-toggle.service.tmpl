@@ -1,0 +1,17 @@
+[Unit]
+Description=Toggle the internal touchpad as a virtual touchscreen
+After=default.target
+
+[Service]
+Type=simple
+Environment="TOUCHPAD_NAME=FTCS0038:00 2808:0106 Touchpad"
+Environment="TOUCHPAD_MOUSE_NAME=FTCS0038:00 2808:0106 Mouse"
+Environment=KEYD_MONITOR={{ lookPath "keyd" }}
+ExecStart=%h/.local/libexec/chezmoi/touchpad-touchscreen.py --toggle-daemon
+Restart=on-failure
+RestartSec=2
+KillMode=mixed
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target
