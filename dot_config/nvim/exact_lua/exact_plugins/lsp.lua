@@ -10,9 +10,7 @@ return {
     {
         "williamboman/mason.nvim",
         build = ":MasonUpdate",
-        opts = {
-            PATH = "prepend"
-        },
+        opts = function() return require("config.mason_registry").get_options() end,
     },
 
     {

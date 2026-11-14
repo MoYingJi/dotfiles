@@ -14,8 +14,12 @@ M.servers = {
     cssls = "vscode-css-language-server",
     jsonls = "vscode-json-language-server",
     yamlls = "yaml-language-server",
+    taplo = "taplo", -- toml # extra/taplo-cli
+    lemminx = "lemminx", -- xml # archlinuxcn/lemminx
     marksman = "marksman",
     systemd_lsp = "systemd-lsp",
+
+    dae_lsp = { executable = "dae-lsp", local_registry = true },
 }
 
 M.fallback_groups = {
@@ -30,10 +34,21 @@ M.server_configs = {
             },
         },
     },
+    dae_lsp = {
+        cmd = { "dae-lsp", "--stdio" },
+        filetypes = { "dae" },
+        root_markers = { ".git", "package.json" },
+    },
 }
 
 M.shebang_filetype = {
-    ["^#!.*ccrun"] = "c"
+    ["^#!.*ccrun"] = "c",
+}
+
+vim.filetype.add {
+    extension = {
+        dae = "dae",
+    },
 }
 
 vim.diagnostic.config {
@@ -46,21 +61,43 @@ vim.api.nvim_create_autocmd("LspAttach", {
     end,
 })
 
-vim.api.nvim_create_autocmd({"BufRead", "BufNewFile"}, {
-    pattern = "*", -- 对所有文件生效，在回调函数里再精确过滤
-    callback = function()
-        local first_line = vim.api.nvim_buf_get_lines(0, 0, 1, false)[1]
+vim.filetype.add { pattern = { [".*"] = {
+    ---@param _ string 文件路径
+    ---@param bufnr number 缓冲区编号
+    ---@return string | nil 文件类型
+    function(_, bufnr)
+        if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+        local first_line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
+        if not first_line or first_line:sub(1, 2) ~= '#!' then return nil end
 
-        if first_line then
-            for pattern, filetype in ipairs(M.shebang_filetype) do
-                if first_line:match(pattern) then
-                    vim.bo.filetype = filetype
-                    break
-                end
+        for pattern, filetype in pairs(M.shebang_filetype) do
+            if first_line:match(pattern) then
+                return filetype
             end
         end
     end,
-})
+} } }
+
+local function get_executable(server)
+    local entry = M.servers[server]
+    if type(entry) == "table" then
+        if entry.check_executable == false then return nil end
+        return entry.executable
+    end
+    return entry
+end
+
+local function get_install_hint(server)
+    local entry = M.servers[server]
+    if type(entry) == "table" and entry.local_registry then
+        local package = server:gsub("_", "-")
+        if require("config.mason_registry").has_package(package) then
+            return ":MasonInstall " .. package
+        end
+        return ("本地 Mason registry 不可用或缺少包定义（%s）"):format(package)
+    end
+    return ":LspInstall " .. server
+end
 
 function M.setup()
     local capabilities = require("blink.cmp").get_lsp_capabilities()
@@ -73,7 +110,8 @@ function M.setup()
 
         for _, server in ipairs(group) do
             fallback_peers[server] = group
-            if not selected and vim.fn.executable(M.servers[server]) == 1 then
+            local executable = get_executable(server)
+            if not selected and executable and vim.fn.executable(executable) == 1 then
                 selected = server
             end
         end
@@ -81,8 +119,9 @@ function M.setup()
         if selected then enabled_servers[selected] = true end
     end
 
-    for server, executable in pairs(M.servers) do
-        if not fallback_peers[server] and vim.fn.executable(executable) == 1 then
+    for server in pairs(M.servers) do
+        local executable = get_executable(server)
+        if not fallback_peers[server] and executable and vim.fn.executable(executable) == 1 then
             enabled_servers[server] = true
         end
     end
@@ -93,19 +132,22 @@ function M.setup()
         local filetype = vim.bo[buf].filetype
         local missing = {}
 
-        for server, executable in pairs(M.servers) do
+        for server in pairs(M.servers) do
             local server_config = vim.lsp.config[server]
             local filetypes = server_config and server_config.filetypes or {}
+            local executable = get_executable(server)
             local fallback_available = false
 
             for _, peer in ipairs(fallback_peers[server] or {}) do
-                if vim.fn.executable(M.servers[peer]) == 1 then
+                local peer_executable = get_executable(peer)
+                if peer_executable and vim.fn.executable(peer_executable) == 1 then
                     fallback_available = true
                     break
                 end
             end
 
             if vim.tbl_contains(filetypes, filetype)
+                and executable
                 and vim.fn.executable(executable) ~= 1
                 and not fallback_available
                 and not (notified[buf] and notified[buf][server])
@@ -118,9 +160,13 @@ function M.setup()
 
         if #missing > 0 then
             table.sort(missing)
+            local commands = {}
+            for _, server in ipairs(missing) do
+                table.insert(commands, get_install_hint(server))
+            end
             vim.notify(
-                ("当前文件类型 %q 缺少 LSP: %s\n可运行 ':LspInstall <server>' 按需安装。")
-                    :format(filetype, table.concat(missing, ", ")),
+                ("当前文件类型 %q 缺少 LSP: %s\n按需安装：%s")
+                    :format(filetype, table.concat(missing, ", "), table.concat(commands, " / ")),
                 vim.log.levels.WARN,
                 { title = "LSP" }
             )
@@ -137,7 +183,7 @@ function M.setup()
         callback = function(args) notified[args.buf] = nil end,
     })
 
-    for server, _ in pairs(M.servers) do
+    for server in pairs(M.servers) do
         local config = vim.tbl_deep_extend("force", {
             capabilities = capabilities,
         }, M.server_configs[server] or {})

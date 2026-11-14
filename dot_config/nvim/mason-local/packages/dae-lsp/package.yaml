@@ -1,0 +1,15 @@
+name: dae-lsp
+description: Language Server Protocol implementation for the DAE configuration language
+homepage: https://github.com/daeuniverse/daed/tree/dae-lsp-v0.1.1/packages/dae-lsp
+licenses:
+    - MIT
+languages:
+    - DAE
+categories:
+    - LSP
+source:
+    id: pkg:github/daeuniverse/daed@dae-lsp-v0.1.1
+    build:
+        run: pnpm install --filter @daeuniverse/dae-lsp... --frozen-lockfile && pnpm --filter @daeuniverse/dae-lsp... build
+bin:
+    dae-lsp: node:packages/dae-lsp/dist/server.cjs
