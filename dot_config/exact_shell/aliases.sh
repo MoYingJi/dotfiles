@@ -70,7 +70,7 @@ alias yt-dlp='yt-dlp \
 alias geodbq-system='geodbq \
     --geoip /usr/share/v2ray/geoip.dat \
     --geosite /usr/share/v2ray/geosite.dat \
-'
+' # alias geodbq-system
 
 ## Package Manage
 alias ycr='yc -R'

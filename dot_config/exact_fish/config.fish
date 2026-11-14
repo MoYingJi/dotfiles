@@ -17,14 +17,19 @@ function fish_greeting
 end
 
 
-function clear
-    command clear
-    fish_greeting
-end
-
-
 if status is-interactive
     # 初始化
     zoxide init fish | source
     thefuck --alias | source
+
+    # clear 保留一行 greeting
+    function clear
+        command clear
+        fish_greeting
+    end
+
+    # 显式设置镜像源
+    function env-mirrors
+        source $COMMON_SHELL_PROFILE_DIR/env-mirrors.sh
+    end
 end

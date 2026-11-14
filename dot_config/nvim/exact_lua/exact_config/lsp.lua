@@ -15,6 +15,7 @@ M.servers = {
     jsonls = "vscode-json-language-server",
     yamlls = "yaml-language-server",
     marksman = "marksman",
+    systemd_lsp = "systemd-lsp",
 }
 
 M.fallback_groups = {

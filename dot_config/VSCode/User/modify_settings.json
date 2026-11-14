@@ -1,0 +1,7 @@
+{{- /* chezmoi:modify-template */ -}}
+{{- includeTemplate "merge-json-object" (dict
+    "context" .
+    "preservePaths" (list
+        (list "chat.defaultModel")
+    )
+) -}}

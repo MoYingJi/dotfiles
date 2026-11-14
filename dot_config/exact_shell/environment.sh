@@ -37,15 +37,3 @@ export EXTERNAL_EDITOR="kate"      # 随你便
 
 export TLDR_LANGUAGE="zh"
 export MANPAGER="nvim +Man!" # Man Pager
-
-
-# === 换源 === #
-
-export UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple"
-
-#export RUSTUP_UPDATE_ROOT="https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
-#export RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup"
-#export RUSTUP_UPDATE_ROOT="https://mirrors.aliyun.com/rustup/rustup"
-#export RUSTUP_DIST_SERVER="https://mirrors.aliyun.com/rustup"
-export RUSTUP_UPDATE_ROOT=""
-export RUSTUP_DIST_SERVER=""

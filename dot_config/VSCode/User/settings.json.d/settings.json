@@ -20,15 +20,16 @@
 
     // Schema support
     "json.schemaDownload.trustedDomains": {
-        "https://developer.microsoft.com/json-schemas/": true,
         "https://json-schema.org/": true,
+        "https://developer.microsoft.com/json-schemas/": true,
+        "https://raw.githubusercontent.com/microsoft/vscode/": true,
+        "https://raw.githubusercontent.com/devcontainers/spec/": true,
         "https://json.schemastore.org/": true,
+        "https://www.schemastore.org/": true,
+        "https://schemastore.azurewebsites.net/": true,
         "https://models.dev/model-schema.json": true,
         "https://opencode.ai/config.json": true,
-        "https://raw.githubusercontent.com/devcontainers/spec/": true,
-        "https://raw.githubusercontent.com/microsoft/vscode/": true,
-        "https://schemastore.azurewebsites.net/": true,
-        "https://www.schemastore.org/": true
+        "https://github.com/fastfetch-cli/fastfetch/": true,
     },
 
     "json.schemas": [
@@ -60,6 +61,8 @@
 
     // 我不要 GitHub Copilot 广告！
     "terminal.integrated.initialHint": false,
+    // 我不要你每次都提醒我加 Co-authored-by: Copilot！
+    "git.addAICoAuthor": "off",
 
     // 自动接受聊天所作更改的秒数
     "chat.editing.autoAcceptDelay": 100,
@@ -68,6 +71,8 @@
 
     "workbench.tree.indent": 20,
     "workbench.list.smoothScrolling": true,
+    // vscode 集成浏览器
+    "workbench.browser.openLocalhostLinks": false,
 
     "security.workspace.trust.enabled": false,
 
