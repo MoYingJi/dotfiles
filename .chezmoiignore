@@ -1,7 +1,13 @@
 # Chezmoi Ignore
 
+README.md
+AGENTS.md
+.docs/
+.tests/
+
 ###### 辅助目录 ######
 
+.config/VSCode/User/keybindings.json.d/
 .config/VSCode/User/settings.json.d/
 .config/opencode/opencode.json.d/
 
@@ -111,6 +117,7 @@
 {{- if not (lookPath "python3") }}
 .local/bin/chezmoi/cpu-control
 .local/bin/chezmoi/ttmlfmt
+.local/bin/chezmoi/ttmlroman
 {{- end }}
 
 {{- if not (and (lookPath "ffmpeg") (lookPath "ffprobe")) }}
@@ -159,11 +166,15 @@
 .local/bin/chezmoi/yc
 {{- end }}
 
-###### kwallet-backup service ######
+###### service ######
 
 {{- if not (lookPath "kwalletd6") }}
 .config/systemd/user/kwallet-backup.service
 .local/libexec/chezmoi/kwallet-backup
+{{- end }}
+
+{{- if not (lookPath "dsh") }}
+.config/systemd/user/deepseek-harness.service
 {{- end }}
 
 ###### ~/.local/share/applications ######

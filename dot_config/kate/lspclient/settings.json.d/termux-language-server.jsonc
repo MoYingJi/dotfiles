@@ -1,9 +1,14 @@
 {
     "servers": {
-        "termux-language-server": {
-            "command": ["nvim-mason-path-exe", "termux-language-server"],
-            "filetypes": ["bash", "sh"],
-            "rootPatterns": ["PKGBUILD"]
+        "bash": {
+            "highlightingModeRegex": "^Bash$",
+            "servers": {
+                "termux-language-server": {
+                    "command": ["nvim-mason-path-exe", "termux-language-server"],
+                    "rootIndicationFileNames": ["PKGBUILD"],
+                    "priority": 1
+                }
+            }
         }
     }
 }

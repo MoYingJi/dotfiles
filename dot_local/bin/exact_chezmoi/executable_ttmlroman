@@ -1,0 +1,1106 @@
+#!/usr/bin/env python3
+"""给 AMLL TTML 添加逐字日语罗马音（Python 3.10+，无第三方依赖）。
+
+用法:
+    ttmlroman input.ttml > output.ttml
+    ttmlroman input.ttml -o output.ttml
+    cat input.ttml | ttmlroman
+    ttmlroman -i.bak input.ttml
+    ttmlroman --replace -i input.ttml
+    ttmlroman --synthetic-timing draft.ttml -o editor.ttml
+    ttmlroman --replace --reference lyrics.txt --synthetic-timing draft.ttml -o editor.ttml
+    ttmlroman --replace -r lyrics.lrc -r timing.eslrc --reference-timing draft.ttml -o result.ttml
+    ttmlroman --replace --merge-kana -r lyrics.txt -r timing.eslrc \
+        --reference-timing --synthetic-timing draft.ttml -o editor.ttml
+
+输出采用 head/metadata/iTunesMetadata/transliterations 中的 ja-Latn 轨道；
+text 的 for 对应正文 itunes:key，逐字 span 复制正文的 begin/end。
+默认保留正文的 span 和时间；--merge-kana 可合并明确的小假名组合。
+不重排行或背景人声，不添加用于排版的正文空白。宗旨：空好过错。
+
+无参考歌词时的规则:
+  * 常见黑本式拼写（shi/chi/tsu/fu/ji）；を固定写 o，ぢ/づ写 ji/zu。
+  * 相邻 span 的拗音也会一起识别；テ|ィ → t|i，シ|ャ → sh|a。
+    同一个 span 内的完整组合则写 ti、sha，不增加分割或时间戳。
+  * 促音使用后续辅音（っ|ち → t|chi）；ん前不加空格，元音/y前写 n'。
+  * ー重复前一个已知元音；おう/えい按假名写 o u/e i，不推断长音。
+  * 每个完整假名音节之间添加空格；组合的两半、促音和后续音节之间
+    不加空格。长音符与前一音节相连。
+  * 汉字、拉丁字母和标点不注音；含汉字的 span 若没有完整明确的参考读音，
+    整格留空，不以半截假名音译掩盖缺漏。
+    平假名は/へ无法区分助词读音，所在 span 整格不填，避免部分注音掩盖缺漏；
+    片假名ハ/ヘ仍写 ha/he。孤立的っ/ー或缺少上下文时，所在 span 也不填。
+  * 主唱和 x-bg 背景人声分别处理；原有翻译、Ruby 注音不作为正文读入。
+
+默认保留已有 ja-Latn（或未标语言的行内 x-roman），按行跳过以免重复；
+--replace 重新生成日语音译，会替换这些行的手工日语注音。
+缺失 itunes:key 时会生成未被占用的 L<number>；重复 key 会报错。
+默认在假名缺少逐字 begin/end 时报错，不自动划分时间轴。
+--synthetic-timing 用于已有逐字 span 的未打轴草稿，会覆盖整份正文的时间：
+从 1.000 秒开始，按文档顺序每词分配 250 ms，主唱、背景人声均使用独立时间；
+同步更新行、背景人声、分段和 body 的范围，以及已有的 dur。
+此时逐字 span 可以没有原始时间，但整行纯文本仍不会自动拆词。
+已有逐字日语音译需配合 --replace 重建；已有逐字翻译/其他语言音译不能直接改轴。
+这些时间只供编辑器关联注音，不代表演唱时间，之后需要重新打轴。
+
+AMLL 按行 ID 和逐字时间戳关联音译，不要求数量相等；空音译 span 会被丢弃。
+有缺注音的词且起始时间重复/相差不超过 2 ms 时，默认报错，避免导入错位。
+--allow-ambiguous-timing 可输出仅供文本检查的草稿，不保证可正确导入。
+打轴后请再次 --replace 生成，让外置音译的时间戳与正文同步。
+
+--reference/-r 可重复指定 UTF-8 TXT、LRC、ESLRC 参考歌词。
+行序默认 auto，支持主译音、音主译、主音、主译、主等排列；可通过
+--reference-order 显式指定（对所有参考文件生效，混合行序请用 auto）。
+按原文及顺序对齐，允许参考的一行对应多个正文行；重复副歌有多种最优
+对应时不采纳。所有可行的音节切分必须给同一正文词相同读音，才会补入。
+相邻独立汉字的读音边界通常无法唯一确定，不凭音节数强分；一个 span
+包含整词时则可以使用明确的整词读音。多个参考的有效读音冲突时留空。
+汉字读音内部尽量按假名分隔（謎 → na zo，思 → o mo）；拗音保持完整，
+ん接前音、促音接后音。分隔本身有歧义时也留空。
+结合原文规范化 shi/si、chi/ti、wo/o 等拼写；小假名的 te i → ti 等
+也仅在原文明确时处理。没有上下文可消歧的 ti、长音附标等不会硬猜假名。
+无效参考行不提供汉字/助词读音，仍可独立使用已有假名规则；含汉字的词
+若无法得到完整参考读音则整格留空。规范化、歧义和缺漏始终向 stderr
+警告，-q 仅关闭常规统计。默认依然保留已有日语音译，需要时加 --replace。
+
+--reference-timing 只从参考 ESLRC 补缺失或 begin=end=0 的正文词时间，
+不覆盖已有有效时间。正文词必须恰好覆盖完整连续的 ESLRC 片段，不能
+把一个片段分给多个字；不均分或插值。LRC 的行首时间不充当逐字时间。
+更新正文范围并使用新时间生成音译；逐字日语音译需 --replace，其他逐字
+辅助轨道可能阻止改轴。未补齐的时间仍接受原有歧义检查，可配合
+--allow-ambiguous-timing 输出检查稿。
+
+--reference-timing --synthetic-timing 可以搭配：保留明确的参考/已有时间，
+只给其余词生成假时间。优先放在相邻时间锚点之间或附近；没有安全空隙
+时放在真实时间范围之后。所有假起点都避开 AMLL 的 2 ms 匹配容差。
+同一作用域中无法唯一关联的真实起点也会转成假时间并警告。
+这是一份需要完整重新打轴的编辑草稿，参考时间仅用于定位。
+
+--merge-kana 将相邻、同样式、同作用域的 じ|ゃ、テ|ィ 等组合合成一个
+正文 span；仅接受全零/缺失时间或首尾相接的有效时间。不跨越正文空白、
+样式、Ruby、人声或段落，不靠合并汉字消除读音歧义。ん、っ、ー可能对应
+独立节拍，保留其原有边界；原来就在同一 span 中的「らん」也不会拆开。
+合并后的主词和音译共享完整时间范围；已有日语音译需 --replace 重建。
+"""
+from __future__ import annotations
+
+import argparse
+from bisect import bisect_left, insort
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+import os
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+import unicodedata
+from xml.dom import Node, minidom
+from xml.parsers.expat import ExpatError
+
+TT = "http://www.w3.org/ns/ttml"
+TTM = TT + "#metadata"
+TTS = TT + "#styling"
+APPLE = "http://music.apple.com/lyric-ttml-internal"
+ITUNES = "http://itunes.apple.com/lyric-ttml-extensions"
+XML = "http://www.w3.org/XML/1998/namespace"
+XMLNS = "http://www.w3.org/2000/xmlns/"
+LANG = "ja-Latn"
+
+# 同时支持 chezmoi 源码直接运行和部署后的 ~/.local/bin/chezmoi/ttmlroman。
+_library = Path(__file__).resolve().parents[2] / "lib/python"
+sys.path.insert(0, str(_library if _library.is_dir() else Path.home() / ".local/lib/python"))
+
+SINGLE: dict[str, str] = {}
+for kana, roman in (
+    ("あいうえお", "a i u e o"),
+    ("かきくけこ", "ka ki ku ke ko"),
+    ("がぎぐげご", "ga gi gu ge go"),
+    ("さしすせそ", "sa shi su se so"),
+    ("ざじずぜぞ", "za ji zu ze zo"),
+    ("たちつてと", "ta chi tsu te to"),
+    ("だぢづでど", "da ji zu de do"),
+    ("なにぬねの", "na ni nu ne no"),
+    ("はひふへほ", "ha hi fu he ho"),
+    ("ばびぶべぼ", "ba bi bu be bo"),
+    ("ぱぴぷぺぽ", "pa pi pu pe po"),
+    ("まみむめも", "ma mi mu me mo"),
+    ("やゆよ", "ya yu yo"),
+    ("らりるれろ", "ra ri ru re ro"),
+    ("わゐゑをん", "wa wi we o n"),
+    ("ぁぃぅぇぉゃゅょゎゕゖゔ", "a i u e o ya yu yo wa ka ke vu"),
+):
+    SINGLE.update(zip(kana, roman.split()))
+
+COMBO: dict[str, str] = {}
+for base, onset in (
+    ("き", "ky"), ("ぎ", "gy"), ("し", "sh"), ("じ", "j"),
+    ("ち", "ch"), ("ぢ", "j"), ("に", "ny"), ("ひ", "hy"),
+    ("び", "by"), ("ぴ", "py"), ("み", "my"), ("り", "ry"),
+):
+    for small, vowel in zip("ゃゅょ", "auo"):
+        COMBO[base + small] = onset + vowel
+COMBO.update(dict(pair.split(":") for pair in (
+    "いぇ:ye うぁ:wa うぃ:wi うぇ:we うぉ:wo "
+    "きぇ:kye ぎぇ:gye くぁ:kwa くぃ:kwi くぇ:kwe くぉ:kwo くゎ:kwa "
+    "ぐぁ:gwa ぐぃ:gwi ぐぇ:gwe ぐぉ:gwo ぐゎ:gwa "
+    "しぇ:she じぇ:je すぃ:si ずぃ:zi ちぇ:che "
+    "つぁ:tsa つぃ:tsi つぇ:tse つぉ:tso "
+    "てぃ:ti てゅ:tyu とぅ:tu でぃ:di でゅ:dyu どぅ:du "
+    "にぇ:nye ひぇ:hye びぇ:bye ぴぇ:pye みぇ:mye りぇ:rye "
+    "ふぁ:fa ふぃ:fi ふぇ:fe ふぉ:fo ふゃ:fya ふゅ:fyu ふょ:fyo "
+    "ゔぁ:va ゔぃ:vi ゔぇ:ve ゔぉ:vo ゔゃ:vya ゔゅ:vyu ゔょ:vyo"
+).split()))
+
+
+def elements(node):
+    return [n for n in node.childNodes if n.nodeType == Node.ELEMENT_NODE]
+
+
+def children(node, namespace, name):
+    return [n for n in elements(node)
+            if n.namespaceURI == namespace and n.localName == name]
+
+
+def role(node):
+    return node.getAttributeNS(TTM, "role")
+
+
+def is_japanese_roman(node):
+    lang = node.getAttributeNS(XML, "lang").lower()
+    return lang == "ja-latn"
+
+
+def inline_romans(line):
+    return [n for n in line.getElementsByTagNameNS(TT, "span")
+            if role(n) == "x-roman"
+            and (is_japanese_roman(n) or not n.hasAttributeNS(XML, "lang"))]
+
+
+@dataclass
+class Atom:
+    char: str
+    owner: minidom.Element | None
+    ambiguous: bool = False
+
+
+def atoms_for(node, include_untimed=False):
+    """只为有完整时间戳的正文 span 分配 owner，其余字符作为上下文边界。"""
+    atoms: list[Atom] = []
+
+    def visit(current, owner=None):
+        if current.nodeType in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE):
+            for char in unicodedata.normalize("NFKC", current.data):
+                ambiguous = char in "はへ"
+                if "\u30a1" <= char <= "\u30f6":
+                    char = chr(ord(char) - 0x60)
+                # NFKC 的半角浊点，以及分解的全角浊点，允许跨 span 合成。
+                if char in "\u3099\u309a" and atoms:
+                    previous = atoms[-1]
+                    composed = unicodedata.normalize("NFC", previous.char + char)
+                    if len(composed) == 1 and previous.owner is not None and owner is not None:
+                        previous.char = composed
+                        continue
+                atoms.append(Atom(char, owner, ambiguous))
+            return
+        if current.nodeType != Node.ELEMENT_NODE:
+            return
+        if (role(current) in ("x-translation", "x-roman")
+                or current.getAttributeNS(TTS, "ruby") in ("text", "textContainer", "delimiter")):
+            return
+        if role(current) == "x-bg":
+            atoms.append(Atom("\0", None))
+            return  # 背景人声在独立作用域处理。
+        if (current.namespaceURI, current.localName) == (TT, "br"):
+            atoms.append(Atom("\n", None))
+            return
+        if (current.namespaceURI, current.localName) == (TT, "span"):
+            if ((current.hasAttribute("begin") and current.hasAttribute("end"))
+                    or (include_untimed and owner is None)):
+                owner = current
+        for child in current.childNodes:
+            visit(child, owner)
+
+    # 不把作用域根节点本身的 x-bg 当成排除条件。
+    for child in node.childNodes:
+        visit(child)
+    return atoms
+
+
+def ideograph(char):
+    return ("\u3400" <= char <= "\u9fff" or "\U00020000" <= char <= "\U000323af"
+            or char in "々〆ヶ")
+
+
+def romanize(atoms):
+    """返回 owner -> 注音；空格保存在后一 owner 的注音前，序列化时外置。"""
+    out: dict[minidom.Element, str] = {}
+    # 不输出一个正文词的半截读音，尤其不能用假名尾巴掩盖未读出的汉字。
+    unresolved = {a.owner for a in atoms if a.ambiguous or ideograph(a.char)}
+    last_vowel = ""
+    connected = False
+    glue_next = False
+    i = 0
+
+    def syllable(index):
+        if index >= len(atoms) or atoms[index].owner is None or atoms[index].ambiguous:
+            return "", 0
+        pair = "".join(a.char for a in atoms[index:index + 2])
+        if (pair in COMBO and index + 1 < len(atoms)
+                and atoms[index + 1].owner is not None):
+            return COMBO[pair], 2
+        value = SINGLE.get(atoms[index].char, "")
+        return value, int(bool(value))
+
+    def emit(owner, value, join=False):
+        nonlocal connected, glue_next
+        if out and (not connected or (not join and not glue_next)):
+            value = " " + value
+        out[owner] = out.get(owner, "") + value
+        connected = True
+        glue_next = False
+
+    while i < len(atoms):
+        atom = atoms[i]
+        char, owner = atom.char, atom.owner
+        if owner is None or atom.ambiguous:
+            connected, glue_next, last_vowel = False, False, ""
+            i += 1
+            continue
+        if char == "っ":
+            following, _ = syllable(i + 1)
+            # ch 使用 t；不对未知辅音、元音、n/y/w/r 推断促音。
+            consonant = "t" if following.startswith("ch") else following[:1]
+            if consonant and consonant in "kgsztdhfbpjcv":
+                emit(owner, consonant)
+                glue_next = True
+                last_vowel = ""
+            else:
+                unresolved.add(owner)
+                connected, glue_next, last_vowel = False, False, ""
+            i += 1
+            continue
+        if char == "ー":
+            if last_vowel:
+                emit(owner, last_vowel, join=True)
+            else:
+                unresolved.add(owner)
+                connected, glue_next = False, False
+            i += 1
+            continue
+        pair = "".join(a.char for a in atoms[i:i + 2])
+        if (pair in COMBO and len(atoms[i:i + 2]) == 2
+                and any(a.owner in unresolved for a in atoms[i:i + 2])):
+            unresolved.update(a.owner for a in atoms[i:i + 2])
+            connected, glue_next, last_vowel = False, False, ""
+            i += 2
+            continue
+        value, length = syllable(i)
+        if not value:
+            # 未识别的字不输出，但阻断组合/长音/促音上下文。
+            connected, glue_next, last_vowel = False, False, ""
+            i += 1
+            continue
+        if char == "ん":
+            following, _ = syllable(i + 1)
+            if following and following[0] in "aeiouy":
+                value += "'"
+            emit(owner, value, join=True)
+            last_vowel = ""
+        elif length == 2 and atoms[i + 1].owner is not owner:
+            emit(owner, value[:-1])
+            emit(atoms[i + 1].owner, value[-1], join=True)
+            last_vowel = value[-1]
+        else:
+            emit(owner, value)
+            last_vowel = value[-1] if value[-1] in "aeiou" else ""
+        i += length
+    return {owner: text for owner, text in out.items() if owner not in unresolved}
+
+
+def clock_seconds(value):
+    """解析绝对时钟或秒/毫秒等 offset time；帧/节拍需要文档额外参数。"""
+    try:
+        if ":" in value:
+            parts = value.split(":")
+            if len(parts) not in (2, 3):
+                raise InvalidOperation
+            result = sum(Decimal(part) * 60 ** i
+                         for i, part in enumerate(reversed(parts)))
+        else:
+            factor = Decimal(1)
+            for suffix, multiplier in (("ms", ".001"), ("s", "1"), ("m", "60"), ("h", "3600")):
+                if value.endswith(suffix):
+                    value = value[:-len(suffix)]
+                    factor = Decimal(multiplier)
+                    break
+            result = Decimal(value) * factor
+        if not result.is_finite() or result < 0:
+            raise InvalidOperation
+        return result
+    except InvalidOperation:
+        raise ValueError(f"无效或暂不支持的时间戳: {value}") from None
+
+
+def timing_conflict(atoms, result):
+    """AMLL 匹配忽略空音译；检查不完整轨道能否在同起点组内保持位置。"""
+    owners = list(dict.fromkeys(
+        a.owner for a in atoms if a.owner is not None and not a.char.isspace()
+    ))
+    timed = []
+    for owner in owners:
+        start = clock_seconds(owner.getAttribute("begin"))
+        timed.append((start * 1000, owner in result))
+    timed.sort()
+    # 官方匹配器的起始时间快速匹配允许 2 ms 误差。
+    for (left_time, left_known), (right_time, right_known) in zip(timed, timed[1:]):
+        if right_time - left_time <= 2 and left_known != right_known:
+            return True
+    return False
+
+
+def line_key(line):
+    keys = [line.getAttributeNS(ns, "key") for ns in (APPLE, ITUNES)
+            if line.hasAttributeNS(ns, "key")]
+    if len(set(keys)) > 1:
+        raise ValueError("同一 p 的两种 itunes:key 属性值不一致")
+    return keys[0] if keys else ""
+
+
+def ns_prefix(root, namespace, preferred):
+    """为新增属性寻找已声明前缀；已有同名前缀被占用时不覆盖。"""
+    for attr in root.attributes.values():
+        if attr.namespaceURI == XMLNS and attr.prefix == "xmlns" and attr.value == namespace:
+            return attr.localName
+    prefix, number = preferred, 1
+    while root.hasAttribute("xmlns:" + prefix):
+        prefix = preferred + str(number)
+        number += 1
+    root.setAttributeNS(XMLNS, "xmlns:" + prefix, namespace)
+    return prefix
+
+
+def make_tt(doc, name):
+    root = doc.documentElement
+    qname = root.prefix + ":" + name if root.prefix else name
+    return doc.createElementNS(TT, qname)
+
+
+def make_apple(doc, name):
+    # 每个节点显式声明默认命名空间，兼容使用任意前缀的输入文档。
+    node = doc.createElementNS(APPLE, name)
+    node.setAttributeNS(XMLNS, "xmlns", APPLE)
+    return node
+
+
+def get_track(doc):
+    root = doc.documentElement
+    heads = children(root, TT, "head")
+    if heads:
+        head = heads[0]
+    else:
+        head = make_tt(doc, "head")
+        root.insertBefore(head, root.firstChild)
+    metadata_nodes = children(head, TT, "metadata")
+    metadata = metadata_nodes[0] if metadata_nodes else make_tt(doc, "metadata")
+    if not metadata_nodes:
+        head.appendChild(metadata)
+    containers = children(metadata, APPLE, "iTunesMetadata")
+    container = containers[0] if containers else make_apple(doc, "iTunesMetadata")
+    if not containers:
+        metadata.appendChild(container)
+    lists = children(container, APPLE, "transliterations")
+    tracks = lists[0] if lists else make_apple(doc, "transliterations")
+    if not lists:
+        container.appendChild(tracks)
+    # 只往标准 ja-Latn 轨道写入，不混用已有的其他罗马化标准。
+    for track in children(tracks, APPLE, "transliteration"):
+        if track.getAttributeNS(XML, "lang").lower() == LANG.lower():
+            return track
+    track = make_apple(doc, "transliteration")
+    track.setAttributeNS(XML, "xml:lang", LANG)
+    tracks.appendChild(track)
+    return track
+
+
+def merge_kana_words(doc, lines, replace, warn):
+    """仅合并明确的小假名组合或分解浊点；不凭语言学猜测删除演唱节拍。"""
+    annotations = {}
+    for text in doc.documentElement.getElementsByTagNameNS(APPLE, "text"):
+        annotations.setdefault(text.getAttribute("for"), []).append(text)
+    count = 0
+
+    def plain(node):
+        if any(c.nodeType not in (Node.TEXT_NODE, Node.CDATA_SECTION_NODE)
+               for c in node.childNodes):
+            return None
+        return "".join(c.data for c in node.childNodes)
+
+    def signature(node):
+        return {(a.namespaceURI, a.localName, a.value) for a in node.attributes.values()
+                if a.name not in ("begin", "end", "dur")}
+
+    def zero(node):
+        return (not node.hasAttribute("begin") and not node.hasAttribute("end")
+                or node.hasAttribute("begin") and node.hasAttribute("end")
+                and clock_seconds(node.getAttribute("begin")) == clock_seconds(node.getAttribute("end")) == 0)
+
+    def visit(parent):
+        nonlocal count
+        if (role(parent) in ("x-translation", "x-roman")
+                or parent.getAttributeNS(TTS, "ruby")):
+            return
+        left = parent.firstChild
+        while left is not None:
+            right = left.nextSibling
+            if (right is not None and left.nodeType == right.nodeType == Node.ELEMENT_NODE
+                    and left.namespaceURI == right.namespaceURI == TT
+                    and left.localName == right.localName == "span"
+                    and not role(left) and not role(right)
+                    and not left.getAttributeNS(TTS, "ruby") and not right.getAttributeNS(TTS, "ruby")
+                    and not left.hasAttributeNS(XML, "id") and not right.hasAttributeNS(XML, "id")
+                    and signature(left) == signature(right)):
+                a, b = plain(left), plain(right)
+                if a is not None and b is not None:
+                    normalized = unicodedata.normalize("NFKC", a + b)
+                    folded = "".join(chr(ord(c) - 0x60) if "\u30a1" <= c <= "\u30f6" else c
+                                     for c in normalized)
+                    combination = (len(a) == len(b) == 1 and
+                                   (folded in COMBO or len(normalized) == 1 and folded in SINGLE))
+                    untimed = zero(left) and zero(right)
+                    touching = (all(n.hasAttribute(k) for n in (left, right) for k in ("begin", "end"))
+                                and clock_seconds(left.getAttribute("end")) == clock_seconds(right.getAttribute("begin"))
+                                and clock_seconds(left.getAttribute("begin")) < clock_seconds(left.getAttribute("end"))
+                                and clock_seconds(right.getAttribute("begin")) < clock_seconds(right.getAttribute("end")))
+                    if combination and (untimed or touching):
+                        if touching:
+                            left.setAttribute("end", right.getAttribute("end"))
+                            if left.hasAttribute("dur"):
+                                duration = clock_seconds(left.getAttribute("end")) - clock_seconds(left.getAttribute("begin"))
+                                left.setAttribute("dur", f"{duration:.3f}")
+                        elif not all(n.hasAttribute(k) for n in (left, right) for k in ("begin", "end")):
+                            for attribute in ("begin", "end", "dur"):
+                                if left.hasAttribute(attribute):
+                                    left.removeAttribute(attribute)
+                        while right.firstChild is not None:
+                            left.appendChild(right.firstChild)
+                        parent.removeChild(right)
+                        count += 1
+                        continue
+            if left.nodeType == Node.ELEMENT_NODE:
+                visit(left)
+            left = right
+
+    for line in lines:
+        texts = annotations.get(line_key(line), [])
+        japanese = inline_romans(line) or any(
+            t.parentNode.localName == "transliteration" and is_japanese_roman(t.parentNode)
+            for t in texts)
+        foreign_timed = any(
+            not (t.parentNode.localName == "transliteration" and is_japanese_roman(t.parentNode))
+            and any(n.hasAttribute("begin") or n.hasAttribute("end") for n in t.getElementsByTagName("*"))
+            for t in texts)
+        if japanese and not replace or foreign_timed:
+            warn(f"{line_key(line) or '未编号行'}: 已有需保留的辅助轨道，跳过假名合并；"
+                 "日语音译可通过 --replace 重建")
+            continue
+        visit(line)
+    return count
+
+
+def prepare_retiming(doc, replace, option):
+    """改轴前清除可重建的逐字日语音译，拒绝保留会失效的其他逐字轨道。"""
+    for text in list(doc.documentElement.getElementsByTagNameNS(APPLE, "text")):
+        timed = [node for node in text.getElementsByTagName("*")
+                 if node.localName == "span"
+                 and (node.hasAttribute("begin") or node.hasAttribute("end"))]
+        if not timed:
+            continue
+        parent = text.parentNode
+        japanese = (parent.namespaceURI == APPLE and parent.localName == "transliteration"
+                    and is_japanese_roman(parent))
+        if japanese and replace:
+            parent.removeChild(text)
+        elif japanese:
+            raise ValueError(f"{option} 会改变正文时间；已有逐字日语音译需加 --replace 重建")
+        else:
+            raise ValueError(f"{option} 不支持已有逐字翻译或其他语言音译；"
+                             "请使用没有这些逐字辅助轨道的草稿")
+
+
+def apply_synthetic_timing(doc, body, replace):
+    """为实际正文词分配互不重叠的时间，辅助轨道不能保留失效的逐字时间。"""
+    prepare_retiming(doc, replace, "--synthetic-timing")
+
+    cursor = 1000
+
+    def timestamp(milliseconds):
+        return f"{milliseconds // 1000}.{milliseconds % 1000:03d}"
+
+    def stamp(node, start, end):
+        node.setAttribute("begin", timestamp(start))
+        node.setAttribute("end", timestamp(end))
+        if node.hasAttribute("dur"):
+            duration = end if node is body else end - start
+            node.setAttribute("dur", timestamp(duration))
+
+    def word(node):
+        nonlocal cursor
+        start, end = cursor, cursor + 250
+        cursor = end
+        stamp(node, start, end)
+        # 嵌套样式属于同一个词；Ruby 的读音也必须与正文共享这个时间。
+        for child in node.getElementsByTagNameNS(TT, "span"):
+            if child.getAttributeNS(TTS, "ruby") == "text":
+                stamp(child, start, end)
+            else:
+                for attribute in ("begin", "end", "dur"):
+                    if child.hasAttribute(attribute):
+                        child.removeAttribute(attribute)
+        return start, end
+
+    def visit(node):
+        if node.namespaceURI != TT or role(node) in ("x-translation", "x-roman"):
+            return None
+        if node.localName == "span" and role(node) != "x-bg":
+            if node.getAttributeNS(TTS, "ruby") in ("text", "textContainer", "delimiter"):
+                return None
+            return word(node)
+        ranges = [interval for child in elements(node)
+                  if (interval := visit(child)) is not None]
+        if not ranges:
+            if node.localName == "p" or role(node) == "x-bg":
+                return word(node)
+            return None
+        start, end = ranges[0][0], ranges[-1][1]
+        if node is body:
+            start = 0
+        stamp(node, start, end)
+        return start, end
+
+    visit(body)
+
+
+def reference_spans(atoms, normalize):
+    """将正文 owner 映射到参考原文使用的字符坐标，标点不占位置。"""
+    positions, cursor = {}, 0
+    for atom in atoms:
+        length = len(normalize(atom.char))
+        if atom.owner is not None and length:
+            positions.setdefault(atom.owner, []).extend(range(cursor, cursor + length))
+        cursor += length
+    return [(owner, indices[0], indices[-1] + 1) for owner, indices in positions.items()
+            if indices == list(range(indices[0], indices[-1] + 1))]
+
+
+def apply_hybrid_timing(body, scopes, warn):
+    """保留明确的真实时间，只给剩余词分配可安全关联的临时时间。"""
+    owners = list(dict.fromkeys(owner for scope in scopes for owner in scope))
+    known = {}
+    for owner in owners:
+        if owner.hasAttribute("begin") and owner.hasAttribute("end"):
+            start, end = (clock_seconds(owner.getAttribute(a)) * 1000 for a in ("begin", "end"))
+            if end > start:
+                known[owner] = (start, end)
+    # 两个正文起点落进 AMLL 的 2 ms 容差时，不能让“保留真实时间”造成错配。
+    collisions = set()
+    for scope in scopes:
+        timed = sorted((known[owner][0], i, owner) for i, owner in enumerate(scope) if owner in known)
+        for left, right in zip(timed, timed[1:]):
+            if right[0] - left[0] <= 2:
+                collisions.update((left[2], right[2]))
+    for owner in collisions:
+        known.pop(owner)
+    if collisions:
+        warn(f"{len(collisions)} 个正文起点无法在 AMLL 的 2 ms 容差内唯一关联，改用假时间")
+    reserved = sorted(start for start, end in known.values())
+    parking = int(max((end for start, end in known.values()), default=Decimal(0))) + 1000
+    order = {owner: i for i, owner in enumerate(owners)}
+    before, after = [], [None] * len(owners)
+    previous = None
+    for owner in owners:
+        before.append(previous)
+        if owner in known:
+            previous = known[owner][1]
+    following = None
+    for i in reversed(range(len(owners))):
+        after[i] = following
+        if owners[i] in known:
+            following = known[owners[i]][0]
+    synthetic = {}
+
+    def allocate(number, start, end):
+        nonlocal reserved
+        start = max(0, int(start))
+        duration = 250 if end is None else min(250, (int(end) - start) // number)
+        if duration < 5:
+            return None
+        trial, intervals = list(reserved), []
+        for _ in range(number):
+            while True:
+                index = bisect_left(trial, start)
+                neighbors = trial[max(0, index - 1):index + 1]
+                if any(abs(value - start) <= 2 for value in neighbors):
+                    start += 5
+                else:
+                    break
+            if end is not None and start + duration > end:
+                return None
+            intervals.append((start, start + duration))
+            insort(trial, start)
+            start += duration
+        reserved = trial
+        return intervals
+
+    for scope in scopes:
+        index = 0
+        while index < len(scope):
+            if scope[index] in known:
+                index += 1
+                continue
+            stop = index
+            while stop < len(scope) and scope[stop] not in known:
+                stop += 1
+            group = scope[index:stop]
+            left = known[scope[index - 1]][1] if index else before[order[group[0]]]
+            right = known[scope[stop]][0] if stop < len(scope) else after[order[group[-1]]]
+            start = left if left is not None else max(0, right - len(group) * 250) if right is not None else parking
+            intervals = allocate(len(group), start, right)
+            if intervals is None:
+                intervals = allocate(len(group), parking, None)
+            for owner, (a, b) in zip(group, intervals):
+                synthetic[owner] = (a, b)
+                for attribute, value in (("begin", a), ("end", b)):
+                    owner.setAttribute(attribute, f"{value // 1000}.{value % 1000:03d}")
+                if owner.hasAttribute("dur"):
+                    owner.setAttribute("dur", f"{(b - a) / 1000:.3f}")
+                for ruby in owner.getElementsByTagNameNS(TT, "span"):
+                    if ruby.getAttributeNS(TTS, "ruby") == "text":
+                        ruby.setAttribute("begin", owner.getAttribute("begin"))
+                        ruby.setAttribute("end", owner.getAttribute("end"))
+                        if ruby.hasAttribute("dur"):
+                            ruby.setAttribute("dur", f"{(b - a) / 1000:.3f}")
+            parking = max(parking, intervals[-1][1] + 250)
+            index = stop
+
+    def visit(node):
+        if (role(node) in ("x-translation", "x-roman")
+                or node.getAttributeNS(TTS, "ruby") in ("text", "textContainer", "delimiter")):
+            return None
+        if node in known or node in synthetic:
+            return known.get(node, synthetic.get(node))
+        intervals = [value for child in elements(node) if (value := visit(child)) is not None]
+        if not intervals:
+            return None
+        start, end = min(v[0] for v in intervals), max(v[1] for v in intervals)
+        if node.localName in ("body", "div", "p") or role(node) == "x-bg":
+            if node is body:
+                start = 0
+            node.setAttribute("begin", f"{Decimal(start) / 1000:.3f}")
+            node.setAttribute("end", f"{Decimal(end) / 1000:.3f}")
+            if node.hasAttribute("dur"):
+                node.setAttribute("dur", f"{Decimal(end - start) / 1000:.3f}")
+        return start, end
+    visit(body)
+    return len(known), len(synthetic)
+
+
+def reference_retime(doc, body, timings, replace, scopes, warn):
+    """只补缺失/零时长词，不覆盖已有有效时间；防止外置辅助轨道失效。"""
+    pending = {}
+    for owner, interval in timings.items():
+        begin, end = (owner.getAttribute(a) for a in ("begin", "end"))
+        if not begin or not end or clock_seconds(begin) == clock_seconds(end) == 0:
+            pending[owner] = interval
+    rejected = set()
+    for scope in scopes:
+        intervals = []
+        for owner in scope:
+            if owner in pending:
+                a, b = pending[owner]
+                intervals.append((owner, Decimal(a) / 1000, Decimal(b) / 1000))
+            elif owner.hasAttribute("begin") and owner.hasAttribute("end"):
+                a, b = (clock_seconds(owner.getAttribute(k)) for k in ("begin", "end"))
+                if b > a:
+                    intervals.append((owner, a, b))
+        for left, right in zip(intervals, intervals[1:]):
+            if left[2] > right[1]:
+                rejected.update(owner for owner in (left[0], right[0]) if owner in pending)
+    if rejected:
+        warn(f"{len(rejected)} 个候选时间与相邻正文词冲突，保留其原时间")
+        pending = {owner: interval for owner, interval in pending.items() if owner not in rejected}
+    if not pending:
+        return 0
+    # 与改变时间有关的逐字辅助轨道都必须重建，行级翻译可以保留。
+    affected = set()
+    for owner in pending:
+        line = owner
+        while line is not None and getattr(line, "localName", "") != "p":
+            line = line.parentNode
+        if line is not None:
+            affected.add(line_key(line))
+            if inline_romans(line) and not replace:
+                raise ValueError("--reference-timing 改动已有日语音译的时间，需要 --replace")
+    for text in list(doc.documentElement.getElementsByTagNameNS(APPLE, "text")):
+        if text.getAttribute("for") not in affected:
+            continue
+        if not any(n.hasAttribute("begin") or n.hasAttribute("end")
+                   for n in text.getElementsByTagName("*")):
+            continue
+        parent = text.parentNode
+        if parent.localName == "transliteration" and is_japanese_roman(parent) and replace:
+            parent.removeChild(text)
+        else:
+            raise ValueError("--reference-timing 会使已有逐字辅助轨道失效；"
+                             "日语音译可加 --replace，逐字翻译/其他语言音译需先移除")
+    for owner, (start, end) in pending.items():
+        for attribute, value in (("begin", start), ("end", end)):
+            owner.setAttribute(attribute, f"{value // 1000}.{value % 1000:03d}")
+        if owner.hasAttribute("dur"):
+            owner.setAttribute("dur", f"{(end - start) / 1000:.3f}")
+        for child in owner.getElementsByTagNameNS(TT, "span"):
+            if child.getAttributeNS(TTS, "ruby") == "text":
+                child.setAttribute("begin", owner.getAttribute("begin"))
+                child.setAttribute("end", owner.getAttribute("end"))
+                if child.hasAttribute("dur"):
+                    child.setAttribute("dur", f"{(end - start) / 1000:.3f}")
+    # 范围包含未补齐的零时间词，绝不为其创造插值时间。
+    def visit(node):
+        if role(node) in ("x-translation", "x-roman"):
+            return None
+        ranges = [v for child in elements(node) if (v := visit(child)) is not None]
+        if ranges and (node.localName in ("body", "div", "p") or role(node) == "x-bg"):
+            start, end = min(v[0] for v in ranges), max(v[1] for v in ranges)
+            node.setAttribute("begin", f"{start:.3f}")
+            node.setAttribute("end", f"{end:.3f}")
+            if node.hasAttribute("dur"):
+                node.setAttribute("dur", f"{end - start:.3f}")
+            return start, end
+        if node.hasAttribute("begin") and node.hasAttribute("end"):
+            return clock_seconds(node.getAttribute("begin")), clock_seconds(node.getAttribute("end"))
+        return None
+    visit(body)
+    return len(pending)
+
+
+def convert(data: bytes, replace=False, allow_ambiguous_timing=False, synthetic_timing=False,
+            references=(), reference_order="auto", reference_timing=False, warn=None, report=None,
+            merge_kana=False):
+    if synthetic_timing and allow_ambiguous_timing:
+        raise ValueError("--synthetic-timing 与 --allow-ambiguous-timing 不能同时使用")
+    if reference_timing and not references:
+        raise ValueError("--reference-timing 需要至少一个 --reference")
+    if reference_order != "auto" and (reference_order.count("主") != 1
+            or reference_order.count("音") > 1 or reference_order.count("译") > 1
+            or any(c not in "主译音" for c in reference_order)):
+        raise ValueError("--reference-order 应为 auto 或主/译/音的排列，且必须恰有一个主")
+    if warn is None:
+        warn = lambda message: print(f"ttmlroman: 警告: {message}", file=sys.stderr)
+    doc = minidom.parseString(data)
+    root = doc.documentElement
+    if (root.namespaceURI, root.localName) != (TT, "tt"):
+        raise ValueError("根元素必须是 TTML 命名空间中的 tt")
+    if doc.doctype:
+        raise ValueError("不支持带 DTD/实体声明的 TTML")
+    bodies = children(root, TT, "body")
+    if len(bodies) != 1:
+        raise ValueError("必须恰有一个 body")
+    lines = list(bodies[0].getElementsByTagNameNS(TT, "p"))
+    used_keys = {n.getAttribute("for") for n in root.getElementsByTagNameNS(APPLE, "text")}
+    seen_keys = set()
+    for line in lines:
+        key = line_key(line)
+        if key:
+            if key in seen_keys:
+                raise ValueError(f"重复的 itunes:key: {key}")
+            seen_keys.add(key)
+            used_keys.add(key)
+    merged = merge_kana_words(doc, lines, replace, warn) if merge_kana else 0
+    if merged and report:
+        report(f"合并 {merged} 处明确的小假名/浊点组合；保留独立的ん、っ和长音节拍")
+    if synthetic_timing:
+        next_key = 1
+        for line in lines:
+            if line_key(line):
+                continue
+            while "L" + str(next_key) in used_keys:
+                next_key += 1
+            key = "L" + str(next_key)
+            used_keys.add(key)
+            prefix = ns_prefix(root, ITUNES, "itunes")
+            line.setAttributeNS(ITUNES, prefix + ":key", key)
+        if reference_timing:
+            prepare_retiming(doc, replace, "--reference-timing --synthetic-timing")
+        else:
+            apply_synthetic_timing(doc, bodies[0], replace)
+    reference_results, retimed = {}, 0
+    if references:
+        from ttmlroman_ref import References, key as reference_key, kanji, format_reading
+        helper = References(references, reference_order, SINGLE, COMBO, warn)
+        scope_data = []
+        for line in lines:
+            scopes = [line] + [n for n in line.getElementsByTagNameNS(TT, "span")
+                              if role(n) == "x-bg"]
+            for scope in scopes:
+                atoms = atoms_for(scope, include_untimed=True)
+                scope_data.append((line, scope, atoms))
+        helper.bind([(scope, "".join(a.char for a in atoms)) for _, scope, atoms in scope_data])
+        all_timings = {}
+        for line, scope, atoms in scope_data:
+            values, intervals = helper.lookup(scope, reference_spans(atoms, reference_key))
+            reference_results[scope] = values
+            all_timings.update(intervals)
+            # 只为实际将重建的行报告读音缺漏。
+            existing = inline_romans(line) or any(
+                text.getAttribute("for") == line_key(line)
+                for tr in root.getElementsByTagNameNS(APPLE, "transliteration")
+                if is_japanese_roman(tr) for text in children(tr, APPLE, "text"))
+            if replace or not existing:
+                baseline = romanize(atoms)
+                missing = {}
+                for atom in atoms:
+                    if atom.owner is not None and (kanji(atom.char) or atom.ambiguous
+                                                   or atom.char in "っー"):
+                        if not values.get(atom.owner) and (kanji(atom.char) or atom.owner not in baseline):
+                            missing.setdefault(atom.owner, "")
+                            missing[atom.owner] += atom.char
+                if missing:
+                    label = line_key(line) or "未编号行"
+                    reason = "未找到唯一原文匹配" if scope not in helper.matches else "音译无效、切分有歧义或无可用读音"
+                    warn(f"{label}: {reason}，留空: " + "、".join(repr(s) for s in missing.values()))
+        if reference_timing:
+            owner_scopes = [list(dict.fromkeys(a.owner for a in atoms if a.owner is not None))
+                            for _, _, atoms in scope_data]
+            retimed = reference_retime(doc, bodies[0], all_timings, replace, owner_scopes, warn)
+            if report:
+                report(f"ESLRC 已补入 {retimed} 个词的真实时间；未覆盖已有有效时间，未均分或插值")
+            unresolved = sum(
+                1 for _, scope, atoms in scope_data
+                for owner, _, _ in reference_spans(atoms, reference_key)
+                if not owner.hasAttribute("begin") or not owner.hasAttribute("end")
+                or clock_seconds(owner.getAttribute("begin")) == clock_seconds(owner.getAttribute("end")) == 0)
+            if synthetic_timing:
+                kept, fake = apply_hybrid_timing(bodies[0], owner_scopes, warn)
+                if report:
+                    report(f"保留 {kept} 个真实/已有词时间，为 {fake} 个词生成临时假时间")
+            elif unresolved:
+                warn(f"仍有 {unresolved} 个词缺少有效逐字时间；导入前仍需检查时间匹配")
+    old_texts: dict[str, list[minidom.Element]] = {}
+    for track in root.getElementsByTagNameNS(APPLE, "transliteration"):
+        if is_japanese_roman(track):
+            for text in children(track, APPLE, "text"):
+                old_texts.setdefault(text.getAttribute("for"), []).append(text)
+
+    changed, word_count, skipped, ambiguous = 0, 0, 0, 0
+    track = None
+    next_key = 1
+    for line in lines:
+        key = line_key(line)
+        existing_inline = inline_romans(line)
+        if not replace and (key in old_texts or existing_inline):
+            skipped += 1
+            continue
+        scopes = [line] + [n for n in line.getElementsByTagNameNS(TT, "span")
+                           if role(n) == "x-bg"]
+        results = []
+        ambiguous_line = False
+        for scope in scopes:
+            atoms = atoms_for(scope)
+            if any(a.owner is None and (a.char in SINGLE or a.char in "っー"
+                                       or (references and kanji(a.char))) for a in atoms):
+                raise ValueError(f"{key or '未编号行'}: 正文词缺少逐字 begin/end，不自动分配时间；"
+                                 "可用 --synthetic-timing，或从 --reference-timing 补明确的时间")
+            result = romanize(atoms)
+            if references:
+                baseline = result.copy()
+                # 含汉字的词不能只留下假名尾巴而掩盖参考读音的缺漏。
+                for atom in atoms:
+                    if kanji(atom.char):
+                        result.pop(atom.owner, None)
+                result.update({owner: value for owner, value in reference_results.get(scope, {}).items()
+                               if value is not None})
+                for owner, value in reference_results.get(scope, {}).items():
+                    if value is None:
+                        continue
+                    formatted = format_reading(value, SINGLE, COMBO)
+                    if owner in baseline and baseline[owner].replace(" ", "") == value:
+                        result[owner] = baseline[owner]
+                    elif formatted is not None:
+                        result[owner] = formatted
+                    else:
+                        result.pop(owner, None)
+                        warn(f"{key or '未编号行'}: 无法唯一规范分隔音译 {value!r}，留空")
+                for owner, value in reference_results.get(scope, {}).items():
+                    if value is None:
+                        result.pop(owner, None)
+                owners = list(dict.fromkeys(a.owner for a in atoms if a.owner is not None))
+                ordered = {}
+                for owner in owners:
+                    if owner in result:
+                        gap = owner not in baseline or baseline[owner].startswith(" ")
+                        ordered[owner] = (" " if ordered and gap else "") + result[owner].lstrip()
+                result = ordered
+            if result:
+                conflict = timing_conflict(atoms, result)
+                if conflict and not allow_ambiguous_timing:
+                    raise ValueError(
+                        f"{key or '未编号行'}: 部分词没有注音，且逐字起始时间重复或相差不超过 2 ms；"
+                        "AMLL 会丢弃空音译，按数量补空 span 也会错配。"
+                        "可用 --synthetic-timing 生成供编辑器匹配的假时间，"
+                        "或用 --allow-ambiguous-timing 生成仅供文本检查的草稿"
+                    )
+                results.append((scope, result))
+                ambiguous_line |= conflict
+        if not results:
+            if references and replace:
+                removed = old_texts.get(key, []) + existing_inline
+                for old in removed:
+                    old.parentNode.removeChild(old)
+                changed += bool(removed)
+            continue
+        if not key:
+            while "L" + str(next_key) in used_keys:
+                next_key += 1
+            key = "L" + str(next_key)
+            used_keys.add(key)
+            prefix = ns_prefix(root, ITUNES, "itunes")
+            line.setAttributeNS(ITUNES, prefix + ":key", key)
+        if track is None:
+            track = get_track(doc)
+        for old in old_texts.get(key, []):
+            old.parentNode.removeChild(old)
+        for old in existing_inline:
+            old.parentNode.removeChild(old)
+        text = make_apple(doc, "text")
+        text.setAttribute("for", key)
+        track.appendChild(text)
+        for scope, result in results:
+            parent = text
+            if scope is not line:
+                parent = make_tt(doc, "span")
+                parent.setAttributeNS(XMLNS, "xmlns", TT)
+                prefix = ns_prefix(root, TTM, "ttm")
+                parent.setAttributeNS(TTM, prefix + ":role", "x-bg")
+                text.appendChild(parent)
+            for source, roman in result.items():
+                if roman.startswith(" "):
+                    parent.appendChild(doc.createTextNode(" "))
+                    roman = roman[1:]
+                span = make_tt(doc, "span")
+                span.setAttributeNS(XMLNS, "xmlns", TT)
+                for attribute in ("begin", "end"):
+                    span.setAttribute(attribute, source.getAttribute(attribute))
+                span.appendChild(doc.createTextNode(roman))
+                parent.appendChild(span)
+                word_count += 1
+        changed += 1
+        ambiguous += int(ambiguous_line)
+    if not changed and not synthetic_timing and not retimed and not merged:
+        return data, (changed, word_count, skipped, ambiguous)
+    return doc.toxml(encoding="UTF-8"), (changed, word_count, skipped, ambiguous)
+
+
+def normalize_inplace(argv):
+    out = []
+    for i, arg in enumerate(argv):
+        if arg == "--":
+            return out + argv[i:]
+        if arg in ("-i", "--in-place"):
+            out.append("--in-place=")
+        elif arg.startswith("-i") and not arg.startswith("--"):
+            out.append("--in-place=" + arg[2:])
+        else:
+            out.append(arg)
+    return out
+
+
+def atomic_write(path: Path, data: bytes):
+    """在目标目录先写临时文件，再替换；写失败不截断原文件。"""
+    path = path.resolve()
+    descriptor, temporary = tempfile.mkstemp(prefix="." + path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if path.exists():
+            shutil.copymode(path, temporary)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="ttmlroman", description="给 AMLL TTML 添加逐字罗马音，可用参考歌词补明确的汉字/助词读音。",
+        epilog=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
+    parser.add_argument("file", nargs="?", default="-", metavar="文件",
+                        help="输入文件；- 或省略表示 stdin")
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("-o", "--output", metavar="文件", help="输出文件；- 表示 stdout")
+    target.add_argument("-i", "--in-place", metavar="SUFFIX",
+                        help="原地修改；-i.bak 或 --in-place=.bak 同时保留备份")
+    parser.add_argument("--replace", action="store_true",
+                        help="重新生成已有日语音译；默认保留已有音译")
+    timing = parser.add_mutually_exclusive_group()
+    timing.add_argument("--allow-ambiguous-timing", action="store_true",
+                        help="允许输出有时间匹配歧义的草稿，仅供文本检查；导入可能错位")
+    timing.add_argument("--synthetic-timing", action="store_true",
+                        help="覆盖正文时间，每词分配 250 ms 假时间，仅供编辑器关联注音")
+    parser.add_argument("-r", "--reference", action="append", default=[], metavar="歌词文件",
+                        help="参考 TXT/LRC/ESLRC，补明确的汉字和助词读音；可重复指定")
+    parser.add_argument("--reference-order", default="auto", metavar="行序",
+                        help="auto（默认）或主译音/音主译/主音/主译等；对所有参考文件生效")
+    parser.add_argument("--reference-timing", action="store_true",
+                        help="从参考 ESLRC 补缺失/全零逐字时间；可配合 --synthetic-timing 补假时间")
+    parser.add_argument("--merge-kana", action="store_true",
+                        help="合并明确的小假名组合（じ|ゃ→じゃ、テ|ィ→ティ）；保留独立ん/っ/ー")
+    parser.add_argument("-q", "--quiet", action="store_true", help="不向 stderr 输出处理统计")
+    args = parser.parse_args(normalize_inplace(list(sys.argv[1:] if argv is None else argv)))
+    if args.in_place is not None and args.file == "-":
+        parser.error("--in-place 不能与 stdin 一起使用")
+    if args.output and args.output != "-" and args.file != "-":
+        if Path(args.output).resolve() == Path(args.file).resolve():
+            parser.error("覆盖输入请使用 -i；-o 必须指定其他文件")
+    try:
+        data = sys.stdin.buffer.read() if args.file == "-" else Path(args.file).read_bytes()
+        output, (changed, words, skipped, ambiguous) = convert(
+            data, args.replace, args.allow_ambiguous_timing, args.synthetic_timing,
+            args.reference, args.reference_order, args.reference_timing,
+            report=None if args.quiet else lambda message: print(f"ttmlroman: {message}", file=sys.stderr),
+            merge_kana=args.merge_kana,
+        )
+        if args.in_place is not None:
+            source = Path(args.file)
+            if args.in_place:
+                backup = Path(str(source) + args.in_place)
+                if backup.resolve() == source.resolve():
+                    raise ValueError("备份路径不能与输入相同")
+                # 已有备份不覆盖，防止重跑时丢掉最初版本。
+                with backup.open("xb") as stream:
+                    stream.write(data)
+                shutil.copymode(source, backup)
+            atomic_write(source, output)
+        elif args.output and args.output != "-":
+            atomic_write(Path(args.output), output)
+        else:
+            sys.stdout.buffer.write(output)
+        if not args.quiet:
+            print(f"ttmlroman: 生成 {changed} 行、{words} 个逐字音译；保留已有音译 {skipped} 行",
+                  file=sys.stderr)
+            if args.synthetic_timing:
+                print("ttmlroman: 时间轴含系统生成的临时时间戳，仅供编辑器匹配，之后需要完整重新打轴",
+                      file=sys.stderr)
+            if ambiguous:
+                print(f"ttmlroman: {ambiguous} 行含无法唯一关联的逐字音译，导入时可能错配；"
+                      "请在打轴完成后使用 --replace 重新生成", file=sys.stderr)
+        return 0
+    except (OSError, ValueError, ExpatError) as error:
+        print(f"ttmlroman: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
