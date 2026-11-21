@@ -10,6 +10,7 @@ AGENTS.md
 .config/VSCode/User/keybindings.json.d/
 .config/VSCode/User/settings.json.d/
 .config/opencode/opencode.json.d/
+.config/kate/lspclient/settings.json.d/
 
 ###### Shell ######
 
@@ -53,6 +54,16 @@ AGENTS.md
 
 {{- if not (lookPath "gamemoderun") }}
 .config/gamemode.ini
+{{- end }}
+
+{{- if not (lookPath "/usr/bin/kate") }}
+.config/kate
+{{- end }}
+
+{{- if not (lookPath "ttmlfmt") }}
+.config/kate/externaltools/ttml-compress.ini
+.config/kate/externaltools/ttml-format.ini
+.config/kate/externaltools/ttml-pretty.ini
 {{- end }}
 
 {{- if not (lookPath "kitty") }}
@@ -144,6 +155,7 @@ AGENTS.md
 {{- if not (lookPath "/usr/bin/kate") }}
 .local/bin/chezmoi/kate
 .local/bin/chezmoi/kate-hosts
+.local/bin/chezmoi/kate-filter
 {{- end }}
 
 {{- if not (lookPath "plasmashell") }}

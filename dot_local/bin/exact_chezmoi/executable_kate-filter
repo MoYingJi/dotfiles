@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Runs COMMAND [ARGS...] as a Kate external-tool filter: document on stdin, result on stdout.
+# On failure the original document is printed so ReplaceCurrentDocument cannot blank it;
+# the command's stderr and exit status are forwarded.
+set -u
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: kate-filter COMMAND [ARGS...]" >&2
+    exit 2
+fi
+
+work=$(mktemp -d) || exit 1
+trap 'rm -rf "$work"' EXIT
+
+# Drain all of stdin before starting the command, so the writer never hits a broken pipe.
+cat > "$work/in"
+
+rc=0
+timeout 30 "$@" < "$work/in" > "$work/out" 2> "$work/err" || rc=$?
+
+cat "$work/err" >&2
+if [ "$rc" -eq 0 ]; then
+    cat "$work/out"
+else
+    cat "$work/in"
+    exit "$rc"
+fi

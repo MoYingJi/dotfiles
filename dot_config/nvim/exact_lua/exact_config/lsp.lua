@@ -19,11 +19,14 @@ M.servers = {
     marksman = "marksman",
     systemd_lsp = "systemd-lsp",
 
+    mcppls = { executable = "mcppls", local_registry = true },
     dae_lsp = { executable = "dae-lsp", local_registry = true },
 }
 
 M.fallback_groups = {
-    { "pyright", "pylsp" },
+    { filetypes = { "python" }, servers = { "pyright", "pylsp" } },
+    { filetypes = { "c" }, servers = { "clangd" } },
+    { filetypes = { "cpp" }, servers = { "mcppls", "clangd" } },
 }
 
 M.server_configs = {
@@ -33,6 +36,11 @@ M.server_configs = {
                 check = { command = "clippy" },
             },
         },
+    },
+    mcppls = {
+        cmd = { "mcppls", "serve" },
+        filetypes = { "c", "cpp" },
+        root_markers = { "mcpp.toml", "CMakeLists.txt", "compile_commands.json", ".git" },
     },
     dae_lsp = {
         cmd = { "dae-lsp", "--stdio" },
@@ -47,6 +55,7 @@ M.shebang_filetype = {
 
 vim.filetype.add {
     extension = {
+        h = "c", -- .h 有歧义，交给 clangd；.hpp/.hh 等仍按 C++ 处理
         dae = "dae",
     },
 }
@@ -102,28 +111,71 @@ end
 function M.setup()
     local capabilities = require("blink.cmp").get_lsp_capabilities()
     local notified = {}
-    local fallback_peers = {}
-    local enabled_servers = {}
+    local fallback_by_filetype = {}
+    local fallback_servers = {}
 
     for _, group in ipairs(M.fallback_groups) do
-        local selected
+        for _, filetype in ipairs(group.filetypes) do
+            fallback_by_filetype[filetype] = group.servers
+        end
+        for _, server in ipairs(group.servers) do
+            fallback_servers[server] = true
+        end
+    end
 
-        for _, server in ipairs(group) do
-            fallback_peers[server] = group
+    local function select_fallback_server(filetype)
+        for _, server in ipairs(fallback_by_filetype[filetype] or {}) do
             local executable = get_executable(server)
-            if not selected and executable and vim.fn.executable(executable) == 1 then
-                selected = server
+            if executable and vim.fn.executable(executable) == 1 then
+                return server
             end
         end
+    end
 
-        if selected then enabled_servers[selected] = true end
+    local selected_by_filetype = {}
+    local selected_filetypes = {}
+    for _, group in ipairs(M.fallback_groups) do
+        for _, filetype in ipairs(group.filetypes) do
+            local server = select_fallback_server(filetype)
+            if server then
+                selected_by_filetype[filetype] = server
+                selected_filetypes[server] = selected_filetypes[server] or {}
+                table.insert(selected_filetypes[server], filetype)
+            end
+        end
     end
 
     for server in pairs(M.servers) do
-        local executable = get_executable(server)
-        if not fallback_peers[server] and executable and vim.fn.executable(executable) == 1 then
-            enabled_servers[server] = true
+        local config = vim.tbl_deep_extend("force", {
+            capabilities = capabilities,
+        }, M.server_configs[server] or {})
+        vim.lsp.config(server, config)
+    end
+
+    for server in pairs(fallback_servers) do
+        local resolved_config = vim.deepcopy(vim.lsp.config[server])
+        local original_root_dir = resolved_config.root_dir
+        local filetypes = {}
+        for _, filetype in ipairs(resolved_config.filetypes or {}) do
+            if not fallback_by_filetype[filetype] then
+                table.insert(filetypes, filetype)
+            end
         end
+        vim.list_extend(filetypes, selected_filetypes[server] or {})
+        resolved_config.filetypes = filetypes
+        resolved_config.root_dir = function(bufnr, on_dir)
+            local filetype = vim.bo[bufnr].filetype
+            if fallback_by_filetype[filetype] and selected_by_filetype[filetype] ~= server then return end
+
+            if type(original_root_dir) == "function" then
+                original_root_dir(bufnr, on_dir)
+            elseif type(original_root_dir) == "string" then
+                on_dir(original_root_dir)
+            else
+                on_dir(nil)
+            end
+        end
+        vim.lsp.config[server] = resolved_config
     end
 
     local function notify_missing_for_buffer(buf)
@@ -132,24 +184,28 @@ function M.setup()
         local filetype = vim.bo[buf].filetype
         local missing = {}
 
+        local fallback_group = fallback_by_filetype[filetype]
+        if fallback_group then
+            if not selected_by_filetype[filetype] then
+                notified[buf] = notified[buf] or {}
+                for _, server in ipairs(fallback_group) do
+                    if not notified[buf][server] then
+                        notified[buf][server] = true
+                        table.insert(missing, server)
+                    end
+                end
+            end
+        end
+
         for server in pairs(M.servers) do
             local server_config = vim.lsp.config[server]
             local filetypes = server_config and server_config.filetypes or {}
             local executable = get_executable(server)
-            local fallback_available = false
-
-            for _, peer in ipairs(fallback_peers[server] or {}) do
-                local peer_executable = get_executable(peer)
-                if peer_executable and vim.fn.executable(peer_executable) == 1 then
-                    fallback_available = true
-                    break
-                end
-            end
 
             if vim.tbl_contains(filetypes, filetype)
+                and not fallback_servers[server]
                 and executable
                 and vim.fn.executable(executable) ~= 1
-                and not fallback_available
                 and not (notified[buf] and notified[buf][server])
             then
                 notified[buf] = notified[buf] or {}
@@ -184,12 +240,10 @@ function M.setup()
     })
 
     for server in pairs(M.servers) do
-        local config = vim.tbl_deep_extend("force", {
-            capabilities = capabilities,
-        }, M.server_configs[server] or {})
-        vim.lsp.config(server, config)
-
-        if enabled_servers[server] then vim.lsp.enable(server) end
+        local executable = get_executable(server)
+        if executable and vim.fn.executable(executable) == 1 then
+            vim.lsp.enable(server)
+        end
     end
 
     local current_buf = vim.api.nvim_get_current_buf()

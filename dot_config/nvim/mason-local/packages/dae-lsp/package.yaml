@@ -1,3 +1,4 @@
+---
 name: dae-lsp
 description: Language Server Protocol implementation for the DAE configuration language
 homepage: https://github.com/daeuniverse/daed/tree/dae-lsp-v0.1.1/packages/dae-lsp

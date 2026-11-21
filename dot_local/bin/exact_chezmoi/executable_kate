@@ -1,3 +1,12 @@
 #!/usr/bin/bash
 
-exec /usr/bin/kate -new "$@"
+self=$0
+while IFS= read -r p; do
+    # Skip this wrapper itself (same inode), so the next kate on PATH is used.
+    if [ ! "$p" -ef "$self" ]; then
+        exec "$p" -new "$@"
+    fi
+done < <(type -a -p kate)
+
+echo "kate: no kate other than this wrapper found on PATH" >&2
+exit 127

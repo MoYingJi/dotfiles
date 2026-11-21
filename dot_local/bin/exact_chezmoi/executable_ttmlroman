@@ -97,6 +97,9 @@ import unicodedata
 from xml.dom import Node, minidom
 from xml.parsers.expat import ExpatError
 
+sys.path.insert(0, str(Path.home() / ".local/lib/python"))
+from zh_argparse import install_zh_argparse  # type: ignore
+
 TT = "http://www.w3.org/ns/ttml"
 TTM = TT + "#metadata"
 TTS = TT + "#styling"
@@ -834,7 +837,7 @@ def convert(data: bytes, replace=False, allow_ambiguous_timing=False, synthetic_
             apply_synthetic_timing(doc, bodies[0], replace)
     reference_results, retimed = {}, 0
     if references:
-        from ttmlroman_ref import References, key as reference_key, kanji, format_reading
+        from ttmlroman_ref import References, key as reference_key, kanji, format_reading  # type: ignore
         helper = References(references, reference_order, SINGLE, COMBO, warn)
         scope_data = []
         for line in lines:
@@ -1031,6 +1034,8 @@ def atomic_write(path: Path, data: bytes):
 
 
 def main(argv=None):
+    install_zh_argparse()
+
     parser = argparse.ArgumentParser(
         prog="ttmlroman", description="给 AMLL TTML 添加逐字罗马音，可用参考歌词补明确的汉字/助词读音。",
         epilog=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
