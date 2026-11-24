@@ -27,9 +27,4 @@ if status is-interactive
         command clear
         fish_greeting
     end
-
-    # 显式设置镜像源
-    function env-mirrors
-        source $COMMON_SHELL_PROFILE_DIR/env-mirrors.sh
-    end
 end
