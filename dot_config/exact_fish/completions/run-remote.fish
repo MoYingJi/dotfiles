@@ -1,20 +1,26 @@
 command -v run-remote >/dev/null 2>&1; or exit 0
 
-function __fish_run_remote_next_argument
-    set -l tokens (commandline -opc)
-    set -e tokens[1]
+# 按 run-remote 的参数规则解析 tokens（不含命令名），输出三行：
+# 下一个参数的类型、脚本名的下标、脚本参数的起始下标（均从 1 开始）
+function __fish_run_remote_parse
     set -l target_seen 0
     set -l script_seen 0
+    set -l script_index 0
+    set -l args_start (math (count $argv) + 1)
     set -l parse_options 1
     set -l next_option_argument ''
+    set -l index 0
 
-    for token in $tokens
+    for token in $argv
+        set index (math $index + 1)
+
         if test -n "$next_option_argument"
             switch $next_option_argument
                 case target
                     set target_seen 1
                 case script
                     set script_seen 1
+                    set script_index $index
             end
             set next_option_argument ''
             continue
@@ -41,6 +47,7 @@ function __fish_run_remote_next_argument
                     continue
                 case '-S*'
                     set script_seen 1
+                    set script_index $index
                     continue
                 case '-p*' '-i*' '-J*' '-l*' '-o*' '-E*'
                     continue
@@ -53,7 +60,11 @@ function __fish_run_remote_next_argument
             set target_seen 1
         else if test $script_seen -eq 0
             set script_seen 1
+            set script_index $index
+            set args_start (math $index + 1)
+            break
         else
+            set args_start $index
             break
         end
     end
@@ -74,25 +85,30 @@ function __fish_run_remote_next_argument
     else
         echo arguments
     end
+    echo $script_index
+    echo $args_start
+end
+
+function __fish_run_remote_next_argument
+    set -l tokens (commandline -opc)
+    set -e tokens[1]
+    set -l parsed (__fish_run_remote_parse $tokens)
+    echo $parsed[1]
 end
 
 function __fish_run_remote_forward_completions
     set -l tokens (commandline -opc)
     set -e tokens[1]
-    set -l remote_tokens
-    set -l after_separator 0
+    set -l parsed (__fish_run_remote_parse $tokens)
+    test "$parsed[1]" = arguments; or return
 
-    for token in $tokens
-        if test $after_separator -eq 1
-            set -a remote_tokens "$token"
-        else if test "$token" = --
-            set after_separator 1
-        end
+    # 脚本名本身也是要补全的命令，之后的参数与 bash 端一样，可选地跳过紧随脚本名的 --
+    set -l remote_tokens $tokens[$parsed[2]]
+    set -l args $tokens[$parsed[3]..-1]
+    if test "$args[1]" = --
+        set -e args[1]
     end
-
-    if test $after_separator -eq 0
-        return
-    end
+    set -a remote_tokens $args
 
     set -l escaped_tokens
     for token in $remote_tokens
